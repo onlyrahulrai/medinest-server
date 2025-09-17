@@ -123,7 +123,6 @@ export async function startAttempt(quizId: string, userId: string) {
         sectionAttempts.push({
           section: section._id,
           questions: secUserQuestions.map((uq) => uq._id),
-          totalMarks: secQuestions.reduce((acc, q) => acc + q.points, 0), // ✅ freeze here
           score: 0,
           percentage: 0,
           correctAnswers: 0,
@@ -141,7 +140,7 @@ export async function startAttempt(quizId: string, userId: string) {
 
     attempt = await attempt.save();
 
-     attempt = await attempt.populate([
+    attempt = await attempt.populate([
       {
         path: "questions",
         populate: {
@@ -162,6 +161,70 @@ export async function startAttempt(quizId: string, userId: string) {
   return attempt;
 }
 
+// export async function getAttemptById(
+//   attemptId: string,
+//   userId: string,
+//   page?: number
+// ) {
+//   const attempt = await QuizAttemptModel.findById(attemptId)
+//     .populate([
+//       {
+//         path: "quiz",
+//         select: "_id title description timeLimit",
+//       },
+//       {
+//         path: "questions",
+//         populate: {
+//           path: "question",
+//           select: "_id questionText questionType media points timeLimit",
+//         },
+//       },
+//       {
+//         path: "sections",
+//         populate: {
+//           path: "questions",
+//           select: "_id questionText questionType media points timeLimit",
+//         },
+//       },
+//     ])
+//     .lean();
+
+//   if (!attempt) throw new Error("Attempt not found");
+
+//   if (attempt.user.toString() !== userId) throw new Error("Unauthorized");
+
+//   if (attempt.status === "completed") throw new Error("Quiz already completed");
+
+//   const total = attempt.questions.length;
+
+//   // === Pagination response shape ===
+//   let currentQuestionIndex = page
+//     ? page - 1
+//     : attempt.currentQuestionIndex || 0;
+//   currentQuestionIndex = Math.max(0, Math.min(currentQuestionIndex, total - 1));
+
+//   const currentPage = currentQuestionIndex + 1;
+
+//   // Update progress in DB
+//   await QuizAttemptModel.updateOne(
+//     { _id: attemptId },
+//     { $set: { currentQuestionIndex: currentQuestionIndex } }
+//   );
+
+//   const result = attempt.questions[currentQuestionIndex];
+
+//   return {
+//     meta: {
+//       total,
+//       page: currentPage,
+//       has_next: currentPage < total,
+//       has_prev: currentPage > 1,
+//     },
+//     quiz: attempt.quiz,
+//     result,
+//   };
+// }
+
 export async function getAttemptById(
   attemptId: string,
   userId: string,
@@ -171,10 +234,21 @@ export async function getAttemptById(
     .populate([
       {
         path: "quiz",
-        select: "_id title description timeLimit",
+        select: "_id title description timeLimit type",
       },
       {
         path: "questions",
+        populate: {
+          path: "question",
+          select: "_id questionText questionType media points timeLimit",
+        },
+      },
+      {
+        path: "sections.section", // populate section metadata
+        select: "_id title description",
+      },
+      {
+        path: "sections.questions",
         populate: {
           path: "question",
           select: "_id questionText questionType media points timeLimit",
@@ -184,40 +258,90 @@ export async function getAttemptById(
     .lean();
 
   if (!attempt) throw new Error("Attempt not found");
-
   if (attempt.user.toString() !== userId) throw new Error("Unauthorized");
-
   if (attempt.status === "completed") throw new Error("Quiz already completed");
 
-  const total = attempt.questions.length;
+  let result: any;
+  let meta: any;
 
-  // === Pagination response shape ===
-  let currentQuestionIndex = page
-    ? page - 1
-    : attempt.currentQuestionIndex || 0;
-  currentQuestionIndex = Math.max(0, Math.min(currentQuestionIndex, total - 1));
+  if (attempt.quiz.type === "multi-section") {
+    // === Section + Question handling ===
+    const totalSections = attempt.sections.length;
+    let currentSectionIndex = attempt.currentSectionIndex || 0;
+    currentSectionIndex = Math.max(0, Math.min(currentSectionIndex, totalSections - 1));
 
-  const currentPage = currentQuestionIndex + 1;
+    const currentSection = attempt.sections[currentSectionIndex];
+    const totalQuestions = currentSection.questions.length;
 
-  // Update progress in DB
-  await QuizAttemptModel.updateOne(
-    { _id: attemptId },
-    { $set: { currentQuestionIndex: currentQuestionIndex } }
-  );
+    let currentQuestionIndex = page
+      ? page - 1
+      : attempt.currentQuestionIndex || 0;
+    currentQuestionIndex = Math.max(0, Math.min(currentQuestionIndex, totalQuestions - 1));
 
-  const result = attempt.questions[currentQuestionIndex];
+    const currentSectionPage = currentSectionIndex + 1;
+    const currentQuestionPage = currentQuestionIndex + 1;
 
-  return {
-    meta: {
+    // update progress
+    await QuizAttemptModel.updateOne(
+      { _id: attemptId },
+      {
+        $set: {
+          currentSectionIndex,
+          currentQuestionIndex,
+        },
+      }
+    );
+
+    result = currentSection.questions[currentQuestionIndex];
+
+    meta = {
+      section: {
+        _id: currentSection.section?._id,
+        title: currentSection.section?.title,
+        total: totalSections,
+        page: currentSectionPage,
+        has_next: currentSectionPage < totalSections,
+        has_prev: currentSectionPage > 1,
+      },
+      question: {
+        total: totalQuestions,
+        page: currentQuestionPage,
+        has_next: currentQuestionPage < totalQuestions,
+        has_prev: currentQuestionPage > 1,
+      },
+    };
+  } else {
+    // === Standard Question-by-Question handling ===
+    const total = attempt.questions.length;
+    let currentQuestionIndex = page
+      ? page - 1
+      : attempt.currentQuestionIndex || 0;
+    currentQuestionIndex = Math.max(0, Math.min(currentQuestionIndex, total - 1));
+
+    const currentPage = currentQuestionIndex + 1;
+
+    await QuizAttemptModel.updateOne(
+      { _id: attemptId },
+      { $set: { currentQuestionIndex } }
+    );
+
+    result = attempt.questions[currentQuestionIndex];
+
+    meta = {
       total,
       page: currentPage,
       has_next: currentPage < total,
       has_prev: currentPage > 1,
-    },
+    };
+  }
+
+  return {
+    meta,
     quiz: attempt.quiz,
     result,
   };
 }
+
 
 export async function getNextQuestion(
   attemptId: string,
@@ -439,9 +563,4 @@ function mapAttemptToResponse(doc: any): QuizAttemptResponse {
   };
 }
 
-function arraysEqual(a: string[], b: string[]) {
-  if (a.length !== b.length) return false;
-  const sortedA = [...a].sort();
-  const sortedB = [...b].sort();
-  return sortedA.every((value, index) => value === sortedB[index]);
-}
+
