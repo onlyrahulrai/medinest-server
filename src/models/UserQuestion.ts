@@ -4,19 +4,16 @@ import { OptionSchema } from "./Question";
 const UserQuestionSchema = new mongoose.Schema(
   {
     section: { type: mongoose.Schema.Types.ObjectId, ref: "Section", default: null },
-
     attempt: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "QuizAttempt",
       required: true,
     },
-
     question: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Question",
       required: true,
     },
-    
     questionType: {
       type: String,
       enum: ["radio_choice", "multiple_choice", "fill_blank", "true_false", "essay", "short_answer"],
