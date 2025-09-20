@@ -11,6 +11,7 @@ import {
   Security,
   SuccessResponse,
   Response,
+  Query,
 } from "tsoa";
 
 import * as UserService from "../services/userService";
@@ -37,8 +38,11 @@ export class UserController extends Controller {
   )
   @Response<AuthenticationRequiredResponse>(401, "Authentication required")
   @Response<ErrorMessageResponse>(400, "Invalid request")
-  public async getUsers(): Promise<UserListResponse> {
-    return await UserService.getAllUsers(); // returns { results: [...] }
+  public async getUsers(
+    @Query() page: number,
+    @Query() limit: number
+  ): Promise<UserListResponse> {
+    return await UserService.getAllUsers(page, limit);
   }
 
   @Security("jwt")
