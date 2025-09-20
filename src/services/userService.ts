@@ -1,10 +1,43 @@
 import User, { IUser } from "../models/User";
 
-export const getAllUsers = async (): Promise<Partial<IUser>[]> => {
-  const results = await User.find().select("-password").lean();
+interface PaginatedResponse<T> {
+  page: number;
+  limit: number;
+  has_next: boolean;
+  has_prev: boolean;
+  total: number;
+  results: Partial<T>[];
+}
 
-  return { results };
+export const getAllUsers = async (
+  page: number = 1,
+  limit: number = 10
+): Promise<PaginatedResponse<IUser>> => {
+  const effectivePage = Math.max(1, page);
+  const effectiveLimit = Math.max(1, Math.min(limit, 100)); 
+
+  const skip = (effectivePage - 1) * effectiveLimit;
+
+  // total count for pagination
+  const total = await User.countDocuments();
+
+  // fetch paginated users
+  const results = await User.find()
+    .select("-password")
+    .skip(skip)
+    .limit(effectiveLimit)
+    .lean();
+
+  return {
+    page: effectivePage,
+    limit: effectiveLimit,
+    total,
+    has_next: skip + results.length < total,
+    has_prev: effectivePage > 1,
+    results,
+  };
 };
+
 
 export const getUserById = async (
   id: string
