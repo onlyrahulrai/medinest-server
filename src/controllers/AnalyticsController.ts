@@ -67,7 +67,7 @@ export class AnalyticsController extends Controller {
   @SuccessResponse<LeaderboardResponse>(200, "Leaderboard retrieved")
   @Response<ErrorMessageResponse>(400, "Invalid quiz id")
   public async getLeaderboard(
-    @Path() quizId: string,
+    @Path() quizId?: string,
     @Query() limit?: number
   ): Promise<LeaderboardResponse> {
     return QuizAttemptService.getLeaderboard(quizId, limit);
