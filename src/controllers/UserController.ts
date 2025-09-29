@@ -71,7 +71,7 @@ export class UserController extends Controller {
   @Response<AuthenticationRequiredResponse>(401, "Authentication required")
   public async updateUser(
     @Path() id: string,
-    @Body() body: UserRequest
+    @Body() body?: UserRequest
   ): Promise<UserResponse> {
     return UserService.updateUser(id, body);
   }
