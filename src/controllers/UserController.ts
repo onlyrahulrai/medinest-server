@@ -70,7 +70,7 @@ export class UserController extends Controller {
   @Response<ErrorMessageResponse>(400, "Invalid request parameters")
   @Response<AuthenticationRequiredResponse>(401, "Authentication required")
   public async updateUser(
-    @Path() id: string,
+    @Path() id?: string,
     @Body() body?: UserRequest
   ): Promise<UserResponse> {
     return UserService.updateUser(id, body);
