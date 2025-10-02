@@ -13,7 +13,6 @@ import {
   Response,
   Query,
 } from "tsoa";
-
 import * as UserService from "../services/userService";
 import {
   UserListResponse,
@@ -46,6 +45,22 @@ export class UserController extends Controller {
   }
 
   @Security("jwt")
+  @Get("/assessments/summary")
+  @SuccessResponse<UserListResponse>(
+    200,
+    "User assessment summaries retrieved successfully"
+  )
+  @Response<AuthenticationRequiredResponse>(401, "Authentication is required to access this resource")
+  @Response<ErrorMessageResponse>(400, "Invalid request parameters")
+  public async getUsersAssessmentSummary(
+    @Query() page?: number,
+    @Query() limit?: number
+  ): Promise<UserListResponse> {
+    return await UserService.getUserAssessmentSummary({ page, limit });
+  }
+
+
+  @Security("jwt")
   @Get("{id}")
   @SuccessResponse<UserResponse>(200, "User retrieved successfully")
   @Response<AuthenticationRequiredResponse>(401, "Authentication required")
@@ -70,7 +85,7 @@ export class UserController extends Controller {
   @Response<ErrorMessageResponse>(400, "Invalid request parameters")
   @Response<AuthenticationRequiredResponse>(401, "Authentication required")
   public async updateUser(
-    @Path() id: string,
+    @Path() id?: string,
     @Body() body?: UserRequest
   ): Promise<UserResponse> {
     return UserService.updateUser(id, body);
