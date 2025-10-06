@@ -20,9 +20,7 @@ import {
 
 import {
   ErrorMessageResponse,
-  SuccessMessageResponse,
 } from "../types/schema/Common";
-import { AuthenticationRequiredResponse } from "../types/schema/Auth";
 import {
   LeaderboardResponse,
   QuizStatsResponse,
