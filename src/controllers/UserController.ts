@@ -65,7 +65,7 @@ export class UserController extends Controller {
   @SuccessResponse<UserResponse>(200, "User retrieved successfully")
   @Response<AuthenticationRequiredResponse>(401, "Authentication required")
   @Response<ErrorMessageResponse>(400, "Invalid user id supplied")
-  public async getUser(@Path() id: string): Promise<UserResponse | null> {
+  public async getUser(@Path() id?: string): Promise<UserResponse | null> {
     return UserService.getUserById(id);
   }
 
