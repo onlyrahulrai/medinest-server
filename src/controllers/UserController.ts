@@ -74,7 +74,7 @@ export class UserController extends Controller {
   @SuccessResponse<UserResponse>(201, "User created successfully")
   @Response<FieldValidationError>(422, "Validation error")
   @Response<ErrorMessageResponse>(400, "Invalid request parameters")
-  public async createUser(@Body() body: UserRequest): Promise<UserResponse> {
+  public async createUser(@Body() body?: UserRequest): Promise<UserResponse> {
     return UserService.createUser(body);
   }
 
