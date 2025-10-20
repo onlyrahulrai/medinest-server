@@ -86,7 +86,7 @@ export class QuizAttemptController extends Controller {
   @SuccessResponse<QuizAttemptResponse>(200, "Quiz attempt updated successfully")
   @Response<ErrorMessageResponse>(400, "Failed to update quiz attempt: invalid attempt ID or request data")
   public async editAttempt(
-    @Path() attemptId: string,
+    @Path() attemptId?: string,
     @Request() req: any,
     @Body() body: any,
   ): Promise<QuizAttemptResponse> {
