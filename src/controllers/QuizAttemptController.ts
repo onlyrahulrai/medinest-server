@@ -133,7 +133,7 @@ export class QuizAttemptController extends Controller {
   )
   public async saveAnswer(
     @Request() req: any,
-    @Path() attemptId: string,
+    @Path() attemptId?: string,
     @Body()
     body: {
       questionId: string;
