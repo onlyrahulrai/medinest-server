@@ -181,7 +181,7 @@ export const confirmResetPassword = async (token: string, password: string) => {
 
 export const getUserDetails = async (userId: string) => {
   // Find the user and populate role
-  const userInstance = await User.findById(userId).populate({
+  const userInstance = await User.findById(userId).select("-password").populate({
     path: "role",
     select: "name",
   });
