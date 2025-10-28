@@ -10,22 +10,29 @@ export const sendMail = async ({
   html: string;
 }) => {
   const transporter = nodemailer.createTransport({
-    // service: "gmail",
-    // secure: true,
-    // port: 465,
-    host: "smtp.ethereal.email",
-    port: 587,
-    secure: false,
+    service: "gmail",
+    secure: true,
+    port: 465,
+    // host: "smtp.ethereal.email",
+    // port: 587,
+    // secure: false,
     auth: {
-      user: process.env.EMAIL_FROM,
-      pass: process.env.EMAIL_PASS,
+      user: process.env.REAL_MAIL,
+      pass: process.env.REAL_PASSWORD,
     },
   });
 
-  await transporter.sendMail({
-    from: process.env.EMAIL_FROM,
-    to,
-    subject,
-    html,
-  });
+  try {
+    const info = await transporter.sendMail({
+      from: process.env.REAL_MAIL,
+      to,
+      subject,
+      html,
+    });
+
+    console.log("Email sent:", info.messageId);
+  } catch (error) {
+    console.error("Error sending email:", error);
+    throw new Error("Failed to send email");
+  }
 };
