@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose";
+import QuizAttempt from "./QuizAttempt";
 
 export interface IUser extends Document {
   firstName?: string;
@@ -14,6 +15,7 @@ export interface IUser extends Document {
   role?: mongoose.Types.ObjectId | null;
   isActive?: boolean;
   isVerified?: boolean;
+  getTotalAssessmentsCompleted: () => Promise<number>;
 }
 
 const UserSchema: Schema = new Schema(
@@ -72,6 +74,13 @@ UserSchema.set("toObject", {
     return ret;
   },
 });
+
+UserSchema.methods.getTotalAssessmentsCompleted = async function () {
+  return await QuizAttempt.countDocuments({
+    user: this._id,
+    status: "completed",
+  });
+};
 
 const User = mongoose.model<IUser>("User", UserSchema);
 

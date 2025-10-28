@@ -58,6 +58,7 @@ const ALLOWED_MIME_TYPES = new Set<string>([
   "image/png",
   "image/jpg",
   "image/jpeg",
+  "application/pdf",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
   "application/vnd.ms-excel", // .xls (older)
   // Optionally include a few common Excel variants browsers sometimes send:
@@ -72,7 +73,7 @@ const fileFilter = (_req: Request, file: Express.Multer.File, cb: FileFilterCall
   if (ALLOWED_MIME_TYPES.has(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error("Only .png, .jpg, .jpeg, .xlsx, and .xls files are allowed"));
+    cb(new Error("Only .png, .jpg, .jpeg, .pdf, .xlsx, and .xls files are allowed"));
   }
 };
 

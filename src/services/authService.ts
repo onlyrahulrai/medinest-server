@@ -180,6 +180,7 @@ export const confirmResetPassword = async (token: string, password: string) => {
 };
 
 export const getUserDetails = async (userId: string) => {
+  // Find the user and populate role
   const userInstance = await User.findById(userId).populate({
     path: "role",
     select: "name",
@@ -189,7 +190,15 @@ export const getUserDetails = async (userId: string) => {
     throw new Error("We couldn’t find an account matching those details.");
   }
 
-  return userInstance.toObject();
+  // ✅ Call your instance method
+  const completedAssessmentsCount = await userInstance.getTotalAssessmentsCompleted();
+
+  // Convert to plain object and add the count
+  const userObject = userInstance.toObject();
+
+  userObject.completedAssessments = completedAssessmentsCount;
+
+  return userObject;
 };
 
 export const verifyEmail = async (token: string) => {
