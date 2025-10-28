@@ -502,7 +502,6 @@ export async function submitAnswers(
     incorrectAnswers: attempt.incorrectAnswers,
     status: attempt.status,
     completedAt: attempt.completedAt,
-    sections: attempt.sections, // include per-section stats if needed
   };
 }
 
