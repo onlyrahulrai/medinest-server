@@ -448,10 +448,16 @@ export async function submitAnswers(
         sectionTotalMarks > 0 ? (sectionScore / sectionTotalMarks) * 100 : 0;
 
       const isCompleted = sectionAnswered >= sectionTotal;
-      const completedAt = isCompleted ? new Date() : null;
+
+      let completedAt = section.completedAt;
+
+      if (isCompleted && !section.completedAt) {
+        completedAt = new Date();
+      }
 
       const startTime = section.startedAt ? new Date(section.startedAt) : null;
       const endTime = completedAt ? new Date(completedAt) : null;
+      
       const timeTaken =
         startTime && endTime
           ? (endTime.getTime() - startTime.getTime()) / 1000
