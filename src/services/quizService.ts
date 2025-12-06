@@ -536,7 +536,7 @@ export async function generateExcelReport(_id?: string): Promise<{ path?: string
 
     if (attempts.length === 0) throw new Error("No attempts found");
 
-    // Filter out incomplete attempts
+    // Sort attempts: completed first
     attempts = attempts.sort((a, b) => {
       if (a.status === b.status) return 0;
       if (a.status === "completed") return -1;
@@ -562,16 +562,16 @@ export async function generateExcelReport(_id?: string): Promise<{ path?: string
       const allQuestionIds = Array.from(allQuestionsMap.keys());
       const allQuestionTexts = Array.from(allQuestionsMap.values());
 
-      // Define table columns: Name, Email, Mobile (frozen) + Timestamp + Questions
+      // Define table columns: Name, Email, Mobile, Completed At (frozen) + Questions
       const tableColumns = [
         { name: "Name", filterButton: true },
         { name: "Email", filterButton: true },
         { name: "Mobile", filterButton: true },
-        { name: "Timestamp", filterButton: true },
+        { name: "Completed At", filterButton: true },
         ...allQuestionTexts.map((q) => ({ name: q, filterButton: true })),
       ];
 
-      // Build rows with user data
+      // Build rows
       const rows = attempts.map((attempt: any) => {
         const answersMap = new Map<string, string>();
         for (const q of attempt.questions as any) {
@@ -600,7 +600,7 @@ export async function generateExcelReport(_id?: string): Promise<{ path?: string
         ];
       });
 
-      // Add table with frozen columns
+      // Add table
       sheet.addTable({
         name: "ResponsesTable",
         ref: "A1",
@@ -613,25 +613,25 @@ export async function generateExcelReport(_id?: string): Promise<{ path?: string
         },
       });
 
-      // Freeze first 3 columns (Name, Email, Mobile) and header row
+      // Freeze first 4 columns and header
       sheet.views = [
         {
           state: "frozen",
-          xSplit: 3,
+          xSplit: 4,
           ySplit: 1,
-          activeCell: "D2",
+          activeCell: "E2",
         },
       ];
 
-      // Auto column width
+      // Column widths
       sheet.columns.forEach((col, i) => {
-        col.width = i < 3 ? 20 : 25;
+        col.width = i < 4 ? 20 : 25;
       });
     }
 
     // ✅ SECTIONED QUIZ
     else {
-      // ✅ Collect all unique sections across all attempts
+      // Collect all unique sections
       const allSectionsMap = new Map<string, string>();
       for (const attempt of attempts) {
         for (const sec of attempt.sections || []) {
@@ -650,7 +650,7 @@ export async function generateExcelReport(_id?: string): Promise<{ path?: string
         const sheetName = sanitizeSheetName(sectionTitle || "Untitled Section");
         const sheet = workbook.addWorksheet(sheetName);
 
-        // ✅ Collect all unique questions across all attempts in this section
+        // Collect all unique questions in section
         const allQuestionsMap = new Map<string, string>();
         for (const attempt of attempts) {
           const section = (attempt.sections as any).find(
@@ -666,16 +666,17 @@ export async function generateExcelReport(_id?: string): Promise<{ path?: string
         const allQuestionIds = Array.from(allQuestionsMap.keys());
         const allQuestionTexts = Array.from(allQuestionsMap.values());
 
-        // Define table columns: Name, Email, Mobile (frozen) + Timestamp + Questions
+        // Table columns: Name, Email, Mobile, Completed At, Section Completed At (frozen) + Questions
         const tableColumns = [
           { name: "Name", filterButton: true },
           { name: "Email", filterButton: true },
           { name: "Mobile", filterButton: true },
-          { name: "Timestamp", filterButton: true },
+          { name: "Completed At", filterButton: true },
+          { name: "Section Completed At", filterButton: true },
           ...allQuestionTexts.map((q) => ({ name: q, filterButton: true })),
         ];
 
-        // Build rows with user data
+        // Build rows
         const rows: any[] = [];
         for (const attempt of attempts) {
           const section = (attempt.sections as any).find(
@@ -706,11 +707,12 @@ export async function generateExcelReport(_id?: string): Promise<{ path?: string
             (attempt.user as any)?.email || "N/A",
             (attempt.user as any)?.phone || "N/A",
             attempt.completedAt ? new Date(attempt.completedAt).toLocaleString() : "N/A",
+            section.completedAt ? new Date(section.completedAt).toLocaleString() : "N/A",
             ...allQuestionIds.map((qid) => answersMap.get(qid) || "No answer"),
           ]);
         }
 
-        // Add table with frozen columns
+        // Add table
         sheet.addTable({
           name: `Table_${sectionId}`,
           ref: "A1",
@@ -723,19 +725,19 @@ export async function generateExcelReport(_id?: string): Promise<{ path?: string
           },
         });
 
-        // Freeze first 3 columns (Name, Email, Mobile) and header row
+        // Freeze first 5 columns and header
         sheet.views = [
           {
             state: "frozen",
-            xSplit: 3,
+            xSplit: 5,
             ySplit: 1,
-            activeCell: "D2",
+            activeCell: "F2",
           },
         ];
 
-        // Set column widths
+        // Column widths
         sheet.columns.forEach((col, i) => {
-          col.width = i < 3 ? 20 : 25;
+          col.width = i < 5 ? 20 : 25;
         });
       }
     }
