@@ -110,9 +110,6 @@ export class QuizAttemptController extends Controller {
     @Body() body: { reports?: string }
   ): Promise<QuizAttemptResponse> {
     try {
-      console.log("Saving report for attemptId:", attemptId);
-      console.log("Report data:", body.reports);
-
       const { reports } = body;
 
       if (!attemptId) {
@@ -155,8 +152,6 @@ export class QuizAttemptController extends Controller {
     const { customPrompt } = req.body;
 
     const excelFile = req.file; // File uploaded via multer
-
-    console.log("File: ", excelFile);
 
     return QuizAttemptService.generateAttemptReport({
       customPrompt,

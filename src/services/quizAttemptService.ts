@@ -9,6 +9,13 @@ import { QuizAttemptListResponse } from "../types/schema/QuizAttempt";
 import { shuffle } from "../helper/utils/common";
 import OpenAI from "openai";
 import fs from "fs";
+import path from "path";
+import puppeteer from "puppeteer";
+import { fileURLToPath } from "url";
+
+// FIX: Define __filename and __dirname for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
@@ -118,7 +125,7 @@ export async function startAttempt(quizId: string, userId: string) {
       for (const section of quiz.sections) {
         let secQuestions = [...section.questions];
 
-        console.log("Section Questions:", JSON.stringify(secQuestions));
+        // console.log("Section Questions:", JSON.stringify(secQuestions));
 
         if (quiz.shuffleQuestions) secQuestions = shuffle(secQuestions);
 
@@ -635,7 +642,8 @@ export async function generateAttemptReport({
     firstName: attempt.user?.firstName || "",
     lastName: attempt.user?.lastName || "",
     email: attempt.user?.email || "",
-    phone: attempt.user?.phone || ""
+    phone: attempt.user?.phone || "",
+    age: attempt.user?.age || null,
   };
 
   // Payload for AI (NOT shown to user)
@@ -821,7 +829,9 @@ export async function saveGeneratedAttemptReport({
   attemptId: string;
 }): Promise<QuizAttemptResponse> {
   try {
-    // Verify attempt exists and belongs to user
+    // ---------------------------------------------------------------------
+    // 1. Fetch Attempt
+    // ---------------------------------------------------------------------
     const attempt = await QuizAttemptModel.findOne({
       _id: attemptId,
     }).populate([
@@ -833,17 +843,78 @@ export async function saveGeneratedAttemptReport({
       throw new Error("Attempt not found or unauthorized");
     }
 
-    // Save the AI-generated report to the attempt
-    attempt.reportContent = reports;
-    
+    // ---------------------------------------------------------------------
+    // 2. Ensure /uploads and /uploads/reports directories exist
+    // ---------------------------------------------------------------------
+    const uploadsDir = path.join(__dirname, "../../uploads");
+    const reportsDir = path.join(uploadsDir, "reports");
+
+    // Create /uploads if missing
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+      console.log("Created folder:", uploadsDir);
+    }
+
+    // Create /uploads/reports if missing
+    if (!fs.existsSync(reportsDir)) {
+      fs.mkdirSync(reportsDir, { recursive: true });
+      console.log("Created folder:", reportsDir);
+    }
+
+    // ---------------------------------------------------------------------
+    // 3. Generate PDF filename & path
+    // ---------------------------------------------------------------------
+    const pdfFileName = `Report_${attempt._id}.pdf`;
+    const pdfFilePath = path.join(reportsDir, pdfFileName);
+
+    // ---------------------------------------------------------------------
+    // 4. Generate PDF using Puppeteer
+    // ---------------------------------------------------------------------
+    const browser = await puppeteer.launch({
+      headless: "new",
+      args: ["--no-sandbox", "--disable-setuid-sandbox"]
+    });
+
+    const page = await browser.newPage();
+
+    // Load HTML content
+    await page.setContent(reports, {
+      waitUntil: "networkidle0",
+    });
+
+    // Generate PDF
+    await page.pdf({
+      path: pdfFilePath,
+      format: "A4",
+      printBackground: true,
+      margin: {
+        top: "98px",
+        bottom: "98px",
+        left: "72px",
+        right: "72px",
+      },
+    });
+
+    await browser.close();
+
+    // ---------------------------------------------------------------------
+    // 5. Save HTML + File Path into DB
+    // ---------------------------------------------------------------------
+    attempt.reportContent = reports;                         // Save HTML
+    attempt.report = `uploads/reports/${pdfFileName}`;      // Public URL/path
+
     await attempt.save();
 
+    // ---------------------------------------------------------------------
+    // 6. Return response
+    // ---------------------------------------------------------------------
     return {
       message: "Report saved successfully",
       attemptId: attempt._id.toString(),
       quizId: attempt.quiz._id.toString(),
       user: attempt.user,
-      report: attempt.report,
+      report: attempt.report,              // PDF path
+      reportContent: attempt.reportContent, // HTML content
       score: attempt.score,
       percentage: attempt.percentage,
       correctAnswers: attempt.correctAnswers,
@@ -851,6 +922,7 @@ export async function saveGeneratedAttemptReport({
       status: attempt.status,
       completedAt: attempt.completedAt,
     };
+
   } catch (error: any) {
     console.error("Error saving generated report:", error);
     throw new Error(error.message || "Failed to save report");
