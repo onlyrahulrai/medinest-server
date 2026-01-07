@@ -5,6 +5,8 @@ export interface UserRequest {
   email?: string;
   phone?: string;
   age?: number;
+  occupation?: string;
+  organization?: string;
   password?: string;
 }
 
