@@ -12,7 +12,8 @@ interface PaginatedResponse<T> {
 
 export const getAllUsers = async (
   page: number = 1,
-  limit: number = 10
+  limit: number = 10,
+  search?: string
 ): Promise<PaginatedResponse<IUser>> => {
   const effectivePage = Math.max(1, page);
   const effectiveLimit = Math.max(1, Math.min(limit, 100));
@@ -22,8 +23,20 @@ export const getAllUsers = async (
   // total count for pagination
   const total = await User.countDocuments();
 
+  const match = search
+    ? {
+        $or: [
+          { firstName: { $regex: search, $options: "i" } },
+          { lastName: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+          { occupation: { $regex: search, $options: "i" } },
+          { organization: { $regex: search, $options: "i" } },
+        ],
+      }
+    : {};
+
   // fetch paginated users
-  const results = await User.find()
+  const results = await User.find(match)
     .select("-password")
     .sort("-createdAt")
     .skip(skip)
