@@ -39,9 +39,10 @@ export class UserController extends Controller {
   @Response<ErrorMessageResponse>(400, "Invalid request")
   public async getUsers(
     @Query() page: number,
-    @Query() limit: number
+    @Query() limit: number,
+    @Query() search?: string,
   ): Promise<UserListResponse> {
-    return await UserService.getAllUsers(page, limit);
+    return await UserService.getAllUsers(page, limit, search);
   }
 
   @Security("jwt")
