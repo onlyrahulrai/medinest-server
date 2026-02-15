@@ -150,12 +150,13 @@ export class QuizAttemptController extends Controller {
     }
 
     // Access multipart form data from request
-    const { customPrompt } = req.body;
+    const { customPrompt, selectedPromptId } = req.body;
 
     const excelFile = req.file; // File uploaded via multer
 
     return QuizAttemptService.generateAttemptReport({
       customPrompt,
+      selectedPromptId,
       excelFile,
       attemptId,
     });
