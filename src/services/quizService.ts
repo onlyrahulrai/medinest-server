@@ -432,6 +432,15 @@ export async function getQuizParticipants(
         },
       },
       { $unwind: "$user" },
+      {
+        $lookup: {
+          from: "quizzes",
+          localField: "quiz",
+          foreignField: "_id",
+          as: "quiz",
+        },
+      },
+      { $unwind: "$quiz" },
     ];
 
     // ✅ optional text search
@@ -476,6 +485,9 @@ export async function getQuizParticipants(
           "user.firstName": 1,
           "user.lastName": 1,
           "user.email": 1,
+          "user.phone": 1,
+          "quiz._id": 1,
+          "quiz.title": 1,
         },
       },
     ]).exec();

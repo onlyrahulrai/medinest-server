@@ -725,8 +725,6 @@ export async function generateAttemptReport({
     customPrompt,
   });
 
-  console.log("Final AI Prompt:\n", aiPrompt);
-
   /* Optional: log only in dev */
   const response = await openai.chat.completions.create({
     model: "gpt-4o-mini",
