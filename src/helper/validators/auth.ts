@@ -1,4 +1,4 @@
-import { phoneVerify, validateEmail, validateString } from "./common";
+import { validatePhone, validateEmail, validateString } from "./common";
 import User from "../../models/User";
 import { TokenBlacklist } from "../../models/TokenBlacklist";
 
@@ -7,6 +7,7 @@ export const validateRegister = async (values: any) => {
 
   // Custom email, string validators
   errors = validateEmail(errors, values);
+  validatePhone(errors, values);
   validateString(errors, values, "firstName", { required: true });
   validateString(errors, values, "lastName", { required: true });
   validateString(errors, values, "age", { required: true });
@@ -83,7 +84,7 @@ export const validateEditProfile = (values: any) => {
   validateString(errors, values, "age", { required: true });
 
   if (values.phone?.trim()) {
-    phoneVerify(errors, values);
+    validatePhone(errors, values);
   }
 
   return errors;
