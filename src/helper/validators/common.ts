@@ -75,7 +75,7 @@ export const validateEmail = (
   return errors;
 };
 
-export const phoneVerify = (
+export const validatePhone = (
   errors: { [key: string]: any },
   values: { [key: string]: string }
 ) => {

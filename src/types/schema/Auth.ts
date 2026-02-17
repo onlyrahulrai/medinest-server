@@ -9,6 +9,7 @@ export interface RegisterInput {
   firstName?: any;
   lastName?: any;
   email?: any;
+  phone?: any;
   age?: any;
   occupation?: any;
   organization?: any;
