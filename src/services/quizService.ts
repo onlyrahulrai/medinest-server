@@ -392,15 +392,22 @@ export async function getQuizAttempts(quizId: string, userId?: string) {
 }
 
 export async function getQuizParticipants(
-  quizId: string,
+  id: string,
+  source: string = "QUIZ",
   filters: ParticipantFilters = {}
 ) {
   try {
-    if (!Types.ObjectId.isValid(quizId)) {
+    if (!Types.ObjectId.isValid(id)) {
       throw new Error("Invalid quiz id supplied");
     }
 
-    const match: Record<string, any> = { quiz: new Types.ObjectId(quizId) };
+    const match: Record<string, any> = {};
+
+    if (source === "license-key") {
+      match.licenseKey = new Types.ObjectId(id);
+    } else {
+      match.quiz = new Types.ObjectId(id);
+    }
 
     // ✅ apply filters
     if (filters.status) {

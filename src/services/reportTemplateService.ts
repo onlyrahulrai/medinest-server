@@ -172,7 +172,7 @@ export const deleteReportTemplate = async (
 ========================================= */
 
 export const getActiveTemplateByScope = async (
-  scope: "welcome" | "guideline" | "summary"
+  scope: "welcome" | "guideline" | "advertisement"
 ): Promise<Partial<IReportTemplate> | null> => {
   return await ReportTemplate.findOne({
     scope,

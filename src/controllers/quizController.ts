@@ -100,8 +100,9 @@ export class QuizController extends Controller {
     @Query() status?: string,
     @Query() score?: string,
     @Query() search?: string,
+    @Query() source?: string,
   ): Promise<QuizResponse | null> {
-    return QuizService.getQuizParticipants(id, { status, score, search, page, limit });
+    return QuizService.getQuizParticipants(id, source, { status, score, search, page, limit });
   }
 
 

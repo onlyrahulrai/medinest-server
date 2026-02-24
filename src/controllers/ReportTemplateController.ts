@@ -39,7 +39,7 @@ export class ReportTemplateController extends Controller {
    * ReportTemplateController
    *
    * - All endpoints require authentication (Admin only)
-   * - Supports scope-based filtering (welcome, guideline, summary)
+   * - Supports scope-based filtering (welcome, guideline, advertisement)
    */
 
   /** Get all report templates */
