@@ -6,7 +6,7 @@ import mongoose, { Document, Model } from "mongoose";
 export const REPORT_TEMPLATE_SCOPES = [
   "welcome",
   "guideline",
-  "summary",
+  "advertisement",
 ] as const;
 
 export type ReportTemplateScope =

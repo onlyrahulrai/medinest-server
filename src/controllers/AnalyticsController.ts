@@ -76,8 +76,9 @@ export class AnalyticsController extends Controller {
   @SuccessResponse<QuizStatsResponse>(200, "Quiz statistics retrieved")
   @Response<ErrorMessageResponse>(400, "Invalid quiz id")
   public async getQuizStats(
-    @Query() quizId: string
+    @Query() ref?: string,
+    @Query() source?: string,
   ): Promise<QuizStatsResponse> {
-    return AnalyticsService.getQuizStatistics(quizId);
+    return AnalyticsService.getQuizStatistics(ref, source);
   }
 }
