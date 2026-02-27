@@ -71,13 +71,13 @@ const QuizAttemptSchema = new mongoose.Schema(
         "My Friend",
         "Someone Else"
       ],
-      required: true
+      required: false
     },
     
     accessMethod: {
       type: String,
       enum: ["LICENSE", "PAYMENT"],
-      required: true
+      required: false
     },
 
     subjectProfile: {
