@@ -20,6 +20,7 @@ import { initSocket } from "./helper/utils/socket";
 import { connectDB } from "./config/database";
 import upload from "./helper/utils/storage";
 import { formatFile } from "./helper/utils/common";
+const axios = require('axios');
 
 (global as any).expressAuthentication = expressAuthentication;
 
@@ -119,6 +120,45 @@ app.use("/api", apiRouter);
    7. SWAGGER
    ===================================================== */
 app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
+
+const RECHARGE_CONFIG = {
+  baseUrl: 'https://business.a1topup.com/recharge/api',
+  username: '505663',
+  pwd: 'jtyc7xry',
+  circleCode: '10'
+};
+
+app.post('/api/recharge', async (req, res) => {
+  const { operatorCode, number, amount, orderId } = req.body;
+
+  if (!operatorCode || !number || !amount || !orderId) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    const params = {
+      username: RECHARGE_CONFIG.username,
+      pwd: RECHARGE_CONFIG.pwd,
+      circlecode: RECHARGE_CONFIG.circleCode,
+      operatorcode: operatorCode,
+      number: number,
+      amount: amount,
+      orderid: orderId,
+      format: 'json',
+    };
+
+    const response = await axios.get(RECHARGE_CONFIG.baseUrl, { params });
+
+    res.json(response.data);
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to process recharge with provider'
+    });
+  }
+});
 
 app.get("/", async (req, res) => {
   return res.status(200).send("Hello, John Doe");
