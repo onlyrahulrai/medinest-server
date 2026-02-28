@@ -20,7 +20,7 @@ import { initSocket } from "./helper/utils/socket";
 import { connectDB } from "./config/database";
 import upload from "./helper/utils/storage";
 import { formatFile } from "./helper/utils/common";
-const axios = require('axios');
+import axios from 'axios';
 
 (global as any).expressAuthentication = expressAuthentication;
 
