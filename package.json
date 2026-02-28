@@ -11,6 +11,7 @@
     "tsoa:build": "npm run tsoa:routes && npm run tsoa:spec"
   },
   "dependencies": {
+    "axios": "^1.13.6",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.56.4",
     "colors": "^1.4.0",
