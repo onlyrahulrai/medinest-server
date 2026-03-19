@@ -32,12 +32,14 @@ export const getAllBlogs = async (req: any, query: any): Promise<BlogListRespons
     filter.tags = tag;
   }
 
-  if (user?.role !== USER_ROLES.USER) {
-    filter.published = true;
+  const userRole = typeof user?.role === "object" ? user?.role?.name : user?.role;
+
+  if (userRole === USER_ROLES.COUNSELLOR) {
+    filter.author = user?._id;
   }
 
-  if (user?.role !== USER_ROLES.COUNSELLOR) {
-    filter.author = user._id;
+  if (!user || userRole === USER_ROLES.USER) {
+    filter.published = true;
   }
 
   if (author) {
@@ -66,21 +68,29 @@ export const getAllBlogs = async (req: any, query: any): Promise<BlogListRespons
   };
 };
 
-export const getBlogById = async (req: any, blogId: string): Promise<BlogDetailsResponse> => {
+export const getBlogById = async (req: any, blogIdOrSlug: string): Promise<BlogDetailsResponse> => {
   const user = req?.user;
 
-  if (!Types.ObjectId.isValid(blogId)) {
-    throw new Error("Invalid blog ID");
-  }
+  let blog: any = null;
 
-  const blog = await BlogModel.findById(blogId).select("-__v").lean();
+  if (Types.ObjectId.isValid(blogIdOrSlug)) {
+    blog = await BlogModel.findById(blogIdOrSlug).populate("author", "firstName lastName name").select("-__v").lean();
+  } else {
+    blog = await BlogModel.findOne({ slug: blogIdOrSlug }).populate("author", "firstName lastName name").select("-__v").lean();
+  }
 
   if (!blog) {
     throw new Error("Blog not found");
   }
 
-  if (user?.role !== USER_ROLES.USER && !blog.published) {
+  const userRole = typeof user?.role === "object" ? user?.role?.name : user?.role;
+
+  if ((!user || userRole === USER_ROLES.USER) && !blog.published) {
     throw new Error("Blog not found");
+  }
+
+  if (blog.author && typeof blog.author === 'object') {
+    (blog.author as any).name = `${(blog.author as any).firstName || ''} ${(blog.author as any).lastName || ''}`.trim();
   }
 
   return blog as unknown as BlogDetailsResponse;
@@ -108,9 +118,49 @@ export const createBlog = async (blogData: any) => {
 };
 
 export const updateBlog = async (blogId: string, updateData: any) => {
-  // Logic to update an existing blog post
+  try {
+    const { title, slug, excerpt, content, coverImage, category, tags, readTime, published, author } = updateData;
+
+    const blog = await BlogModel.findById(blogId);
+
+    if (!blog) {
+      throw new Error("Blog not found");
+    }
+
+    blog.title = title;
+    blog.slug = slug;
+    blog.excerpt = excerpt;
+    blog.content = content;
+    blog.coverImage = coverImage;
+    blog.category = category;
+    blog.tags = tags;
+    blog.readTime = readTime;
+    blog.published = published;
+    blog.author = author;
+
+    await blog.save();
+
+    return blog;
+  } catch (error: any) {
+    throw new Error(error.message || "Failed to update blog");
+  }
 };
 
 export const deleteBlog = async (blogId: string) => {
   // Logic to delete a blog post by its ID
+  try {
+    const blog = await BlogModel.findById(blogId);
+
+    if (!blog) {
+      throw new Error("Blog not found");
+    }
+
+    blog.isDeleted = true;
+
+    await blog.save();
+
+    return blog;
+  } catch (error: any) {
+    throw new Error(error.message || "Failed to delete blog");
+  }
 };

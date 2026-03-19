@@ -33,9 +33,7 @@ import { validateManageBlog } from "../helper/validators/blog";
 @Tags("Blog")
 export class BlogController extends Controller {
   /** Get all blog posts with pagination */
-  @Security("jwt")
   @Get("/")
-  @Middlewares(requirePermission(PERMISSIONS.BLOG_READ))
   @SuccessResponse(
     200,
     "List of blogs retrieved successfully"
@@ -55,10 +53,8 @@ export class BlogController extends Controller {
     return await BlogService.getAllBlogs(req, { page, limit, search, category, tag, author, status }) as BlogListResponse;
   }
 
-  /** Get a single blog post by ID */
-  @Security("jwt")
-  @Get("/{blogId}")
-  @Middlewares(requirePermission(PERMISSIONS.BLOG_READ))
+  /** Get a single blog post by Id or Slug */
+  @Get("/{blogIdOrSlug}")
   @SuccessResponse(
     200,
     "Blog retrieved successfully"
@@ -67,10 +63,10 @@ export class BlogController extends Controller {
   @Response<ErrorResponse>(400, API_MESSAGES.FETCH_FAILED)
   public async getBlogById(
     @Request() req: any,
-    @Path() blogId: string
+    @Path() blogIdOrSlug: string
   ): Promise<BlogDetailsResponse | ErrorMessageResponse> {
     try {
-      return await BlogService.getBlogById(req, blogId) as BlogDetailsResponse;
+      return await BlogService.getBlogById(req, blogIdOrSlug) as BlogDetailsResponse;
     } catch (error: any) {
       this.setStatus(400);
       return { message: error.message || API_MESSAGES.FETCH_FAILED };
@@ -120,7 +116,19 @@ export class BlogController extends Controller {
     @Path() blogId: string,
     @Body() body: UpdateBlogRequest
   ) {
-    return await BlogService.updateBlog(blogId, body) as unknown as BlogDetailsResponse;
+    try {
+      const fields = validateManageBlog(body);
+
+      if (Object.keys(fields).length > 0) {
+        this.setStatus(422);
+        return { fields };
+      }
+
+      return await BlogService.updateBlog(blogId, body) as unknown as BlogDetailsResponse;
+    } catch (error: any) {
+      this.setStatus(400);
+      return { message: error.message || API_MESSAGES.UPDATE_FAILED };
+    }
   }
 
   /** Delete a blog post by ID */
@@ -137,7 +145,12 @@ export class BlogController extends Controller {
   public async deleteBlog(
     @Path() blogId: string
   ) {
-    return await BlogService.deleteBlog(blogId) as unknown as BlogDetailsResponse;
+    try {
+      return await BlogService.deleteBlog(blogId) as unknown as BlogDetailsResponse;
+    } catch (error: any) {
+      this.setStatus(400);
+      return { message: error.message || API_MESSAGES.DELETE_FAILED };
+    }
   }
 }
 
