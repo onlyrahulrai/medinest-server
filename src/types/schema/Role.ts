@@ -1,17 +1,27 @@
-import { Types } from "mongoose";
-import { PermissionResponse } from "./Permission";
+import { PermissionDetailsResponse } from "./Permission";
 
-export interface RoleRequest {
-  name?: string;
-  order?: number;
-  permissions?:  Types.ObjectId[];
-}
-
-export interface RoleResponse {
-  id: string;
+export interface CreateRoleRequest {
   name: string;
   order?: number;
-  permissions?: PermissionResponse[] | string[];
-  createdAt: string; // often dates come as ISO strings from APIs
-  updatedAt: string;
+  permissions?: string[];
+}
+
+export interface UpdateRoleRequest extends CreateRoleRequest { }
+
+export interface RoleDetailsResponse {
+  _id: string;
+  name: string;
+  order?: number;
+  permissions?: PermissionDetailsResponse[] | string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface RoleListResponse {
+  page: number;
+  limit: number;
+  total: number;
+  has_next: boolean;
+  has_prev: boolean;
+  results: Partial<RoleDetailsResponse>[];
 }

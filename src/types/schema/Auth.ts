@@ -1,3 +1,4 @@
+import { ErrorResponse } from "./Common";
 import { UserResponse } from "./User";
 
 export interface LoginInput {
@@ -47,6 +48,5 @@ export interface AuthUserResponse extends UserResponse {
   __v?: number;
 }
 
-export interface AuthenticationRequiredResponse {
-  message?: string;
+export interface AuthenticationRequiredResponse extends ErrorResponse {
 }
