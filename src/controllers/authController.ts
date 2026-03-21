@@ -72,6 +72,29 @@ export class AuthController extends Controller {
     }
   }
 
+  @Post("/google")
+  @SuccessResponse<AuthUserResponse>(200, "Google Login successful")
+  @Response<ErrorMessageResponse>(400, "Invalid tokens or request")
+  public async continueWithGoogle(
+    @Body() body: { accessToken: string }
+  ): Promise<AuthUserResponse | ErrorMessageResponse> {
+    try {
+      if (!body.accessToken) {
+        this.setStatus(400);
+        return { message: "Access token is required" };
+      }
+
+      const user = await AuthService.continueWithGoogle(body.accessToken);
+
+      this.setStatus(200);
+
+      return user as any;
+    } catch (error: any) {
+      this.setStatus(400);
+      return { message: error?.message || "Google Login failed" };
+    }
+  }
+
   @Post("/register")
   @SuccessResponse<UserDetailsResponse>(201, "User registered successfully")
   @Response<FieldValidationError>(422, "One or more fields failed validation")

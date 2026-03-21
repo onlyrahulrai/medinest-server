@@ -1,3 +1,4 @@
+import axios from "axios";
 import bcrypt from "bcryptjs";
 import { Queue } from "bullmq";
 import jwt from "jsonwebtoken";
@@ -131,6 +132,59 @@ export const loginUser = async (email: string, password: string) => {
     return { ...userData, access, refresh };
   } catch (error: any) {
     throw new Error(error.message || "Login failed");
+  }
+};
+
+export const continueWithGoogle = async (accessToken: string) => {
+  try {
+    const googleProfileRes = await axios.get("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    const { email, name, sub } = googleProfileRes.data;
+
+    let user = await User.findOne({ email }).populate([
+      { path: "roles", select: "name" },
+    ]);
+
+    if (!user) {
+      const role = await Role.findOne({ name: "User" });
+      if (!role) throw new Error("Default role 'User' not found");
+
+      const randomPassword = await bcrypt.hash(uuidV4(), 10);
+
+      const newUser = await new User({
+        name,
+        email,
+        phone: sub, // Using Google's unique `sub` as placeholder to satisfy 'required' and 'unique' DB constraints
+        password: randomPassword,
+        isEmailVerified: true,
+        roles: [role._id],
+      }).save();
+
+      user = await User.findById(newUser._id).populate([
+        { path: "roles", select: "name" },
+      ]);
+      
+      if (!user) throw new Error("Failed to fetch newly created user");
+    }
+
+    const payload = {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      roles: user.roles,
+    };
+
+    const access = generateToken(payload, "24h");
+    const refresh = generateToken(payload, "7d");
+
+    const { password: userPassword, __v, ...userData } = user.toObject();
+
+    return { ...userData, access, refresh };
+  } catch (error: any) {
+    throw new Error(error.response?.data?.error_description || error.message || "Google Login failed");
   }
 };
 
