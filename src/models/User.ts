@@ -11,7 +11,6 @@ export interface IUser extends Document {
   roles?: mongoose.Types.ObjectId[];
   isActive?: boolean;
   isPhoneVerified?: boolean;
-  isEmailVerified?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -19,7 +18,7 @@ export interface IUser extends Document {
 const UserSchema: Schema = new Schema(
   {
     name: { type: String },
-    email: { type: String, unique: true, required: true },
+    email: { type: String },
     phone: {
       type: String,
       unique: true,
@@ -28,16 +27,13 @@ const UserSchema: Schema = new Schema(
     profile: { type: String },
     bio: { type: String },
     address: { type: String },
+    languages: { type: [String] },
     password: { type: String },
     roles: [{
       type: mongoose.Schema.Types.ObjectId,
       ref: "Role",
     }],
     isPhoneVerified: {
-      type: Boolean,
-      default: false,
-    },
-    isEmailVerified: {
       type: Boolean,
       default: false,
     },

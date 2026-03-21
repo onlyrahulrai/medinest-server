@@ -1,87 +1,5 @@
 import { validatePhone, validateEmail, validateString } from "./common";
 import User from "../../models/User";
-import bcrypt from "bcryptjs";
-
-export const validateRegister = async (values: any) => {
-  let errors: Record<string, string> = {};
-
-  // Custom email, string validators
-  errors = validateEmail(errors, values);
-  validatePhone(errors, values);
-  validateString(errors, values, "name", { required: true });
-  validateString(errors, values, "password", { required: true, minLength: 6 });
-  validateString(errors, values, "confirmPassword", {
-    field: "Confirm Password",
-    required: true,
-    minLength: 6,
-  });
-
-  if (
-    values.password &&
-    values.confirmPassword &&
-    values.password !== values.confirmPassword
-  ) {
-    errors.confirmPassword = "Passwords do not match.";
-  }
-
-  const existingEmailUser = await User.findOne({
-    email: values.email
-  });
-
-  const existingPhoneUser = await User.findOne({
-    phone: values.phone
-  });
-
-  if (existingEmailUser) {
-    errors.email = "This email is already in use";
-  }
-
-  if (existingPhoneUser) {
-    errors.phone = "This phone number is already in use";
-  }
-
-  return errors;
-};
-
-export const validateLogin = async (values: any) => {
-  let errors: Record<string, string> = {};
-
-  // Custom email, string validators
-  errors = validateEmail(errors, values);
-  validateString(errors, values, "password", { required: true, minLength: 6 });
-
-  return errors;
-};
-
-export const validateRequestResetPassword = (values: any) => {
-  let errors = validateEmail({}, values);
-
-  return errors;
-};
-
-export const validateRequestResetPasswordConfirm = async (values: any) => {
-  let errors: Record<string, string> = {};
-
-  validateString(errors, values, "newPassword", {
-    required: true,
-    minLength: 6,
-  });
-
-  validateString(errors, values, "confirmPassword", {
-    required: true,
-    minLength: 6,
-  });
-
-  if (
-    values.newPassword &&
-    values.confirmPassword &&
-    values.newPassword !== values.confirmPassword
-  ) {
-    errors.confirmPassword = "Passwords do not match.";
-  }
-
-  return errors;
-};
 
 export const validateEditProfile = async (userId: string, values: Record<string, any>) => {
   let errors = validateEmail({}, values);
@@ -104,41 +22,6 @@ export const validateEditProfile = async (userId: string, values: Record<string,
 
   if (existingPhoneUser) {
     errors.phone = "This phone number is already in use";
-  }
-
-  return errors;
-};
-
-export const validateChangePassword = async (values: any, id: number) => {
-  let errors = validateString({}, values, "oldPassword", {
-    required: true,
-    minLength: 6,
-  });
-  validateString(errors, values, "newPassword", {
-    required: true,
-    minLength: 6,
-  });
-  validateString(errors, values, "confirmPassword", {
-    required: true,
-    minLength: 6,
-  });
-
-  if (
-    values.newPassword &&
-    values.confirmPassword &&
-    values.newPassword !== values.confirmPassword
-  ) {
-    errors.confirmPassword = "Passwords do not match.";
-  }
-
-  if (Object.keys(errors).length === 0) {
-    const user = await User.findById(id);
-
-    const isMatch = await bcrypt.compare(values.oldPassword, user?.password);
-
-    if (!isMatch) {
-      errors.oldPassword = "Password update failed. Please verify your current password.";
-    }
   }
 
   return errors;
