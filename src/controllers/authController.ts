@@ -14,13 +14,16 @@ import {
 import * as AuthService from "../services/authService";
 import {
   validateEditProfile,
+  validateOnboardingProfile,
   validateVerifyPhone,
   validateResendPhoneOtp,
 } from "../helper/validators/auth";
 import {
   AuthenticationRequiredResponse,
   AuthUserResponse,
+  CaregiverLookupResponse,
   EditProfileInput,
+  SaveOnboardingProfileInput,
   VerifyPhoneInput,
   ResendPhoneOtpInput,
 } from "../types/schema/Auth";
@@ -61,11 +64,11 @@ export class AuthController extends Controller {
     }
   }
 
-  @Post("login-with-otp")
-  @SuccessResponse<AuthUserResponse>(200, "OTP Login successful")
+  @Post("verify-phone-otp")
+  @SuccessResponse<AuthUserResponse>(200, "OTP verification successful")
   @Response<FieldValidationError>(422, "One or more fields failed validation")
   @Response<ErrorMessageResponse>(400, "Invalid OTP or phone number")
-  public async loginWithOtp(
+  public async verifyPhoneOtp(
     @Body() body: VerifyPhoneInput
   ): Promise<AuthUserResponse | FieldValidationError | ErrorMessageResponse> {
     try {
@@ -76,14 +79,14 @@ export class AuthController extends Controller {
         return { fields };
       }
 
-      const user = await AuthService.loginWithOtp(body.phone as string, body.otp as string);
+      const user = await AuthService.verifyPhoneOtp(body.phone as string, body.otp as string);
 
       this.setStatus(200);
 
       return user as any;
     } catch (error: any) {
       this.setStatus(400);
-      return { message: error?.message || API_MESSAGES.LOGIN_FAILED };
+      return { message: error?.message || API_MESSAGES.OTP_FAILED };
     }
   }
 
@@ -160,6 +163,45 @@ export class AuthController extends Controller {
     } catch (error: any) {
       this.setStatus(400);
       return { message: error?.message };
+    }
+  }
+
+  @Security("jwt")
+  @Put("onboarding-profile")
+  @SuccessResponse<UserDetailsResponse>(200, "Onboarding profile saved successfully")
+  @Response<ErrorMessageResponse>(400, "Invalid request parameters or format")
+  @Response<FieldValidationError>(422, "One or more fields failed validation")
+  @Response<AuthenticationRequiredResponse>(401, "Authentication required to perform this action")
+  public async saveOnboardingProfile(
+    @Request() req: any,
+    @Body() body: SaveOnboardingProfileInput
+  ): Promise<
+    | UserDetailsResponse
+    | ErrorMessageResponse
+    | FieldValidationError
+    | AuthenticationRequiredResponse
+  > {
+    try {
+      const userId = req.user?._id;
+
+      if (!userId) {
+        this.setStatus(401);
+        return { message: "Authentication required" };
+      }
+
+      const fields = await validateOnboardingProfile(body);
+
+      if (Object.keys(fields).length > 0) {
+        this.setStatus(422);
+        return { fields };
+      }
+
+      const user = await AuthService.saveOnboardingProfile(String(userId), body);
+      this.setStatus(200);
+      return user as any;
+    } catch (error: any) {
+      this.setStatus(400);
+      return { message: error?.message || "Failed to save onboarding profile" };
     }
   }
 

@@ -2,15 +2,16 @@ import bcrypt from "bcryptjs";
 import { Queue } from "bullmq";
 import jwt from "jsonwebtoken";
 import { generateToken } from "../helper/utils/common";
-import { EditProfileInput } from "../types/schema/Auth";
+import { CaregiverLookupResponse, EditProfileInput, SaveOnboardingProfileInput } from "../types/schema/Auth";
 import User from "../models/User";
 import Role from "../models/Role";
 import { TokenBlacklist } from "../models/TokenBlacklist";
-import { v4 as uuidV4 } from "uuid";
 import OTPGenerator from "otp-generator";
 import OTP from "../models/OTP";
 
 const myCommonQueue = new Queue("SS-CommonTask");
+
+const normalizePhone = (phone?: string) => phone?.replace(/\D/g, "") ?? "";
 
 /**
  * Send OTP to a phone number for login.
@@ -23,14 +24,12 @@ export const sendPhoneOtp = async (phone?: string) => {
 
     if (!user) {
       const role = await Role.findOne({ name: "User" });
-      if (!role) throw new Error("Default role 'User' not found");
 
-      const randomPassword = await bcrypt.hash(uuidV4(), 10);
+      if (!role) throw new Error("Default role 'User' not found");
 
       user = await new User({
         name: "",
         phone,
-        password: randomPassword,
         isPhoneVerified: false,
         roles: [role._id],
       }).save();
@@ -72,7 +71,7 @@ export const sendPhoneOtp = async (phone?: string) => {
  * Verify OTP and log the user in.
  * Returns user data with access and refresh tokens.
  */
-export const loginWithOtp = async (phone: string, otp: string) => {
+export const verifyPhoneOtp = async (phone: string, otp: string) => {
   try {
     const user = await User.findOne({ phone }).populate([
       {
@@ -124,7 +123,7 @@ export const loginWithOtp = async (phone: string, otp: string) => {
     const access = generateToken(payload, "24h");
     const refresh = generateToken(payload, "7d");
 
-    const { password: userPassword, __v, ...userData } = user.toObject();
+    const { __v, ...userData } = user.toObject();
 
     return { ...userData, access, refresh };
   } catch (error: any) {
@@ -190,6 +189,104 @@ export const editUserProfile = async (_id: string, data: EditProfileInput) => {
   } catch (error: any) {
     throw new Error(error.message || "Failed to edit user profile");
   }
+};
+
+export const lookupCaregiverByPhone = async (
+  phoneNumber: string,
+  currentUserId?: string
+): Promise<CaregiverLookupResponse> => {
+  const normalizedPhone = normalizePhone(phoneNumber);
+
+  if (!normalizedPhone) {
+    throw new Error("Phone number is required");
+  }
+
+  const user = await User.findOne({ phone: normalizedPhone })
+    .select("_id name phone isPhoneVerified")
+    .lean();
+
+  if (!user || String(user._id) === currentUserId) {
+    return { found: false, phoneNumber: normalizedPhone };
+  }
+
+  return {
+    found: true,
+    userId: user._id,
+    name: user.name,
+    phoneNumber: user.phone,
+    isPhoneVerified: user.isPhoneVerified,
+  };
+};
+
+export const saveOnboardingProfile = async (
+  userId: string,
+  data: SaveOnboardingProfileInput
+) => {
+  const existingUser = await User.findById(userId).select("preferences").lean();
+
+  if (!existingUser) {
+    throw new Error("User not found");
+  }
+
+  const caregiverContacts = await Promise.all(
+    (data.caregivers ?? []).map(async (caregiver) => {
+      const normalizedPhone = normalizePhone(caregiver.phoneNumber);
+      const linkedUser = normalizedPhone
+        ? await User.findOne({ phone: normalizedPhone }).select("_id name phone isPhoneVerified").lean()
+        : null;
+
+      return {
+        userId: linkedUser?._id,
+        name: caregiver.name?.trim() || linkedUser?.name || "",
+        phoneNumber: normalizedPhone,
+        relation: caregiver.relation?.trim() || "",
+        verificationStatus: linkedUser ? "verified_user" : "unregistered_contact",
+        inviteStatus: linkedUser ? "not_required" : "pending_invite",
+      };
+    })
+  );
+
+  const linkedCaregiverIds = caregiverContacts
+    .map((caregiver) => caregiver.userId)
+    .filter(Boolean);
+
+  const updateData: Record<string, any> = {
+    name: data.name?.trim(),
+    gender: data.gender,
+    conditions: data.conditions ?? [],
+    languages: data.languages ?? [],
+    caregiverContacts,
+    caregivers: linkedCaregiverIds,
+    preferences: {
+      ...(existingUser.preferences ?? {}),
+      ...(data.preferences ?? {}),
+    },
+    isOnboardingCompleted: data.isOnboardingCompleted ?? true,
+    onboardingStep: typeof data.onboardingStep === 'number' ? data.onboardingStep : undefined,
+  };
+
+  if (data.dateOfBirth) {
+    updateData.dateOfBirth = new Date(data.dateOfBirth);
+  }
+
+  if (data.weight !== undefined && data.weight !== "") {
+    updateData.weight = Number(data.weight);
+  }
+
+  const updatedUser = await User.findByIdAndUpdate(userId, { $set: updateData }, { new: true })
+    .select("-password -__v")
+    .populate([
+      {
+        path: "roles",
+        select: "name",
+      },
+    ]);
+
+  if (!updatedUser) {
+    throw new Error("Failed to save onboarding profile");
+  }
+
+  return updatedUser.toObject();
 };
 
 /**

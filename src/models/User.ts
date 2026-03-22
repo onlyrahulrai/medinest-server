@@ -1,5 +1,14 @@
 import mongoose, { Schema, Document } from "mongoose";
 
+export interface ICaregiverContact {
+  userId?: mongoose.Types.ObjectId;
+  name?: string;
+  phoneNumber?: string;
+  relation?: string;
+  verificationStatus?: "verified_user" | "unregistered_contact" | "verification_pending";
+  inviteStatus?: "not_required" | "pending_invite" | "invite_sent" | "accepted" | "expired" | "rejected";
+}
+
 export interface IUser extends Document {
   name?: string;
   email?: string;
@@ -7,13 +16,46 @@ export interface IUser extends Document {
   profile?: string;
   bio?: string;
   address?: string;
-  password?: string;
   roles?: mongoose.Types.ObjectId[];
   isActive?: boolean;
   isPhoneVerified?: boolean;
+  dateOfBirth?: Date;
+  weight?: number;
+  gender?: "Male" | "Female" | "Other";
+  conditions?: string[];
+  isOnboardingCompleted?: boolean;
+  onboardingStep?: number;
+  languages?: string[];
+  preferences?: {
+    reminderTimes?: string[];
+    soundEnabled?: boolean;
+    vibrationEnabled?: boolean;
+    shareActivityWithCaregiver?: boolean;
+  };
+  caregiverContacts?: ICaregiverContact[];
   createdAt: Date;
   updatedAt: Date;
 }
+
+const CaregiverContactSchema = new Schema<ICaregiverContact>(
+  {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    name: { type: String },
+    phoneNumber: { type: String },
+    relation: { type: String },
+    verificationStatus: {
+      type: String,
+      enum: ["verified_user", "unregistered_contact", "verification_pending"],
+      default: "verification_pending",
+    },
+    inviteStatus: {
+      type: String,
+      enum: ["not_required", "pending_invite", "invite_sent", "accepted", "expired", "rejected"],
+      default: "pending_invite",
+    },
+  },
+  { _id: false }
+);
 
 const UserSchema: Schema = new Schema(
   {
@@ -27,12 +69,29 @@ const UserSchema: Schema = new Schema(
     profile: { type: String },
     bio: { type: String },
     address: { type: String },
+    dateOfBirth: { type: Date },
+    weight: { type: Number },
+    gender: { type: String, enum: ["Male", "Female", "Other"] },
+    conditions: { type: [String] },
+    isOnboardingCompleted: { type: Boolean, default: false },
+    onboardingStep: { type: Number, default: 0 },
     languages: { type: [String] },
-    password: { type: String },
     roles: [{
       type: mongoose.Schema.Types.ObjectId,
       ref: "Role",
     }],
+    preferences: {
+      type: Object,
+      default: {}
+    },
+    caregivers: {
+      type: [mongoose.Schema.Types.ObjectId],
+      ref: "User",
+    },
+    caregiverContacts: {
+      type: [CaregiverContactSchema],
+      default: [],
+    },
     isPhoneVerified: {
       type: Boolean,
       default: false,

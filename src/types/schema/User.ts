@@ -1,5 +1,14 @@
 import mongoose from "mongoose";
 
+export interface CaregiverContactResponse {
+  userId?: string | mongoose.Types.ObjectId;
+  name?: string;
+  phoneNumber?: string;
+  relation?: string;
+  verificationStatus?: "verified_user" | "unregistered_contact" | "verification_pending";
+  inviteStatus?: "not_required" | "pending_invite" | "invite_sent" | "accepted" | "expired" | "rejected";
+}
+
 export interface CreatUserRequest {
   name?: string;
   email?: string;
@@ -16,6 +25,19 @@ export interface UserDetailsResponse {
   email: string;
   phone?: string;
   profile?: any;
+  dateOfBirth?: Date;
+  weight?: number;
+  gender?: "Male" | "Female" | "Other";
+  conditions?: string[];
+  isOnboardingCompleted?: boolean;
+  languages?: string[];
+  preferences?: {
+    reminderTimes?: string[];
+    soundEnabled?: boolean;
+    vibrationEnabled?: boolean;
+    shareActivityWithCaregiver?: boolean;
+  };
+  caregiverContacts?: CaregiverContactResponse[];
   isActive?: boolean;
   isEmailVerified?: boolean;
   isPhoneVerified?: boolean;
