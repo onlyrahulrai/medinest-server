@@ -32,6 +32,8 @@ export interface IUser extends Document {
     vibrationEnabled?: boolean;
     shareActivityWithCaregiver?: boolean;
   };
+  caregivers?: mongoose.Types.ObjectId[];
+  managedPatients?: mongoose.Types.ObjectId[];
   caregiverContacts?: ICaregiverContact[];
   createdAt: Date;
   updatedAt: Date;
@@ -85,6 +87,10 @@ const UserSchema: Schema = new Schema(
       default: {}
     },
     caregivers: {
+      type: [mongoose.Schema.Types.ObjectId],
+      ref: "User",
+    },
+    managedPatients: {
       type: [mongoose.Schema.Types.ObjectId],
       ref: "User",
     },

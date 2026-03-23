@@ -7,6 +7,8 @@ export interface CaregiverContactResponse {
   relation?: string;
   verificationStatus?: "verified_user" | "unregistered_contact" | "verification_pending";
   inviteStatus?: "not_required" | "pending_invite" | "invite_sent" | "accepted" | "expired" | "rejected";
+  conflict?: boolean;
+  conflictMessage?: string;
 }
 
 export interface CreatUserRequest {
@@ -30,6 +32,7 @@ export interface UserDetailsResponse {
   gender?: "Male" | "Female" | "Other";
   conditions?: string[];
   isOnboardingCompleted?: boolean;
+  onboardingStep?: number;
   languages?: string[];
   preferences?: {
     reminderTimes?: string[];
