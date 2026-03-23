@@ -10,6 +10,7 @@ import {
   Request,
   Security,
   Put,
+  Query,
 } from "tsoa";
 import * as AuthService from "../services/authService";
 import {
@@ -64,11 +65,11 @@ export class AuthController extends Controller {
     }
   }
 
-  @Post("verify-phone-otp")
-  @SuccessResponse<AuthUserResponse>(200, "OTP verification successful")
+  @Post("login-with-otp")
+  @SuccessResponse<AuthUserResponse>(200, "OTP Login successful")
   @Response<FieldValidationError>(422, "One or more fields failed validation")
   @Response<ErrorMessageResponse>(400, "Invalid OTP or phone number")
-  public async verifyPhoneOtp(
+  public async loginWithOtp(
     @Body() body: VerifyPhoneInput
   ): Promise<AuthUserResponse | FieldValidationError | ErrorMessageResponse> {
     try {
@@ -79,14 +80,14 @@ export class AuthController extends Controller {
         return { fields };
       }
 
-      const user = await AuthService.verifyPhoneOtp(body.phone as string, body.otp as string);
+      const user = await AuthService.loginWithOtp(body.phone as string, body.otp as string);
 
       this.setStatus(200);
 
       return user as any;
     } catch (error: any) {
       this.setStatus(400);
-      return { message: error?.message || API_MESSAGES.OTP_FAILED };
+      return { message: error?.message || API_MESSAGES.LOGIN_FAILED };
     }
   }
 
@@ -202,6 +203,36 @@ export class AuthController extends Controller {
     } catch (error: any) {
       this.setStatus(400);
       return { message: error?.message || "Failed to save onboarding profile" };
+    }
+  }
+
+  @Security("jwt")
+  @Get("caregiver-lookup")
+  @SuccessResponse(200, "Caregiver lookup completed successfully")
+  @Response<ErrorMessageResponse>(400, "Invalid request parameters or format")
+  @Response<AuthenticationRequiredResponse>(401, "Authentication required to perform this action")
+  public async caregiverLookup(
+    @Request() req: any,
+    @Query() phoneNumber?: string
+  ): Promise<CaregiverLookupResponse | ErrorMessageResponse | AuthenticationRequiredResponse> {
+    try {
+      const userId = req.user?._id;
+
+      if (!userId) {
+        this.setStatus(401);
+        return { message: "Authentication required" };
+      }
+
+      if (!phoneNumber?.trim()) {
+        this.setStatus(400);
+        return { message: "Phone number is required" };
+      }
+
+      this.setStatus(200);
+      return await AuthService.lookupCaregiverByPhone(phoneNumber, String(userId));
+    } catch (error: any) {
+      this.setStatus(400);
+      return { message: error?.message || "Failed to lookup caregiver" };
     }
   }
 

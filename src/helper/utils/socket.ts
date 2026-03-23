@@ -14,6 +14,11 @@ export const initSocket = (server: HTTPServer) => {
   io.on("connection", (socket: Socket) => {
     console.log("Socket connected:", socket.id);
 
+    socket.on("join-user", (userId: string) => {
+      socket.join(userId);
+      console.log(`User joined room: ${userId}`);
+    });
+
     socket.on("disconnect", () => {
       console.log("Socket disconnected:", socket.id);
     });
@@ -27,4 +32,10 @@ export const getIO = (): SocketIOServer => {
     throw new Error("Socket.io not initialized. Call initSocket(server) first.");
   }
   return io;
+};
+
+export const emitToUser = (userId: string, event: string, data: any) => {
+  if (io) {
+    io.to(userId).emit(event, data);
+  }
 };

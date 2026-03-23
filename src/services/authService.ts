@@ -1,9 +1,12 @@
 import bcrypt from "bcryptjs";
 import { Queue } from "bullmq";
 import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
 import { generateToken } from "../helper/utils/common";
-import { CaregiverLookupResponse, EditProfileInput, SaveOnboardingProfileInput } from "../types/schema/Auth";
+import { CaregiverInvitationStatusInput, CaregiverLookupResponse, EditProfileInput, OnboardingCaregiverInput, SaveOnboardingProfileInput } from "../types/schema/Auth";
+import { emitToUser } from "../helper/utils/socket";
 import User from "../models/User";
+import CaregiverInvitation from "../models/CaregiverInvitation";
 import Role from "../models/Role";
 import { TokenBlacklist } from "../models/TokenBlacklist";
 import OTPGenerator from "otp-generator";
@@ -12,6 +15,29 @@ import OTP from "../models/OTP";
 const myCommonQueue = new Queue("SS-CommonTask");
 
 const normalizePhone = (phone?: string) => phone?.replace(/\D/g, "") ?? "";
+const ACTIVE_INVITE_STATUSES = ["pending_invite", "invite_sent", "accepted"] as const;
+
+const buildOnboardingStep = (data: SaveOnboardingProfileInput) => {
+  if (data.isOnboardingCompleted) {
+    return 4;
+  }
+
+  if (typeof data.onboardingStep === "number") {
+    return Math.min(Math.max(data.onboardingStep, 1), 4);
+  }
+
+  return undefined;
+};
+
+const buildConflictQuery = (currentUserId: string, phoneNumber: string) => ({
+  _id: { $ne: currentUserId },
+  caregiverContacts: {
+    $elemMatch: {
+      phoneNumber,
+      inviteStatus: { $in: [...ACTIVE_INVITE_STATUSES] },
+    },
+  },
+});
 
 /**
  * Send OTP to a phone number for login.
@@ -71,7 +97,7 @@ export const sendPhoneOtp = async (phone?: string) => {
  * Verify OTP and log the user in.
  * Returns user data with access and refresh tokens.
  */
-export const verifyPhoneOtp = async (phone: string, otp: string) => {
+export const loginWithOtp = async (phone: string, otp: string) => {
   try {
     const user = await User.findOne({ phone }).populate([
       {
@@ -136,10 +162,16 @@ export const verifyPhoneOtp = async (phone: string, otp: string) => {
  */
 export const getUserDetails = async (userId: string) => {
   try {
-    const user = await User.findById(userId).select("-password -__v").populate({
-      path: "roles",
-      select: "name",
-    });
+    const user = await User.findById(userId).select("-password -__v").populate([
+      {
+        path: "roles",
+        select: "name",
+      },
+      {
+        path: "managedPatients",
+        select: "name phone",
+      }
+    ]);
 
     if (!user) {
       throw new Error("We couldn't find an account matching those details.");
@@ -201,6 +233,21 @@ export const lookupCaregiverByPhone = async (
     throw new Error("Phone number is required");
   }
 
+  if (currentUserId) {
+    const conflictingUser = await User.findOne(buildConflictQuery(currentUserId, normalizedPhone))
+      .select("name")
+      .lean();
+
+    if (conflictingUser) {
+      return {
+        found: false,
+        phoneNumber: normalizedPhone,
+        conflict: true,
+        conflictMessage: "This caregiver is already linked to another patient.",
+      };
+    }
+  }
+
   const user = await User.findOne({ phone: normalizedPhone })
     .select("_id name phone isPhoneVerified")
     .lean();
@@ -211,10 +258,46 @@ export const lookupCaregiverByPhone = async (
 
   return {
     found: true,
-    userId: user._id,
+    userId: String(user._id),
     name: user.name,
     phoneNumber: user.phone,
     isPhoneVerified: user.isPhoneVerified,
+  };
+};
+
+const buildCaregiverContact = async (
+  userId: string,
+  caregiver: OnboardingCaregiverInput,
+  existingContact?: Record<string, any>
+) => {
+  const normalizedPhone = normalizePhone(caregiver.phoneNumber);
+
+  if (!normalizedPhone) {
+    throw new Error("Caregiver phone number is required");
+  }
+
+  const lookup = await lookupCaregiverByPhone(normalizedPhone, userId);
+
+  if (lookup.conflict) {
+    throw new Error(lookup.conflictMessage || "This caregiver is already linked to another patient.");
+  }
+
+  const linkedUser = lookup.found
+    ? {
+        _id: lookup.userId,
+        name: lookup.name,
+        phone: lookup.phoneNumber,
+        isPhoneVerified: lookup.isPhoneVerified,
+      }
+    : null;
+
+  return {
+    userId: linkedUser?._id || existingContact?.userId || null,
+    name: caregiver.name?.trim() || linkedUser?.name || existingContact?.name || "",
+    phoneNumber: normalizedPhone,
+    relation: caregiver.relation?.trim() || existingContact?.relation || "",
+    verificationStatus: linkedUser ? "verified_user" : existingContact?.verificationStatus || "unregistered_contact",
+    inviteStatus: existingContact?.inviteStatus || "invite_sent",
   };
 };
 
@@ -222,48 +305,48 @@ export const saveOnboardingProfile = async (
   userId: string,
   data: SaveOnboardingProfileInput
 ) => {
-  const existingUser = await User.findById(userId).select("preferences").lean();
+  const existingUser = await User.findById(userId).select("preferences caregiverContacts").lean();
 
   if (!existingUser) {
     throw new Error("User not found");
   }
 
-  const caregiverContacts = await Promise.all(
-    (data.caregivers ?? []).map(async (caregiver) => {
-      const normalizedPhone = normalizePhone(caregiver.phoneNumber);
-      const linkedUser = normalizedPhone
-        ? await User.findOne({ phone: normalizedPhone }).select("_id name phone isPhoneVerified").lean()
-        : null;
+  const existingContacts = existingUser.caregiverContacts || [];
+  const caregiverContacts = data.caregivers === undefined
+    ? existingContacts
+    : await Promise.all(
+        data.caregivers.map(async (caregiver) => {
+          const normalizedPhone = normalizePhone(caregiver.phoneNumber);
+          const existingContact = existingContacts.find((contact: any) => contact.phoneNumber === normalizedPhone);
 
-      return {
-        userId: linkedUser?._id,
-        name: caregiver.name?.trim() || linkedUser?.name || "",
-        phoneNumber: normalizedPhone,
-        relation: caregiver.relation?.trim() || "",
-        verificationStatus: linkedUser ? "verified_user" : "unregistered_contact",
-        inviteStatus: linkedUser ? "not_required" : "pending_invite",
-      };
-    })
-  );
+          return buildCaregiverContact(userId, caregiver, existingContact);
+        })
+      );
 
   const linkedCaregiverIds = caregiverContacts
+    .filter(c => c.inviteStatus === "accepted")
     .map((caregiver) => caregiver.userId)
     .filter(Boolean);
 
   const updateData: Record<string, any> = {
-    name: data.name?.trim(),
-    gender: data.gender,
-    conditions: data.conditions ?? [],
-    languages: data.languages ?? [],
     caregiverContacts,
     caregivers: linkedCaregiverIds,
     preferences: {
       ...(existingUser.preferences ?? {}),
       ...(data.preferences ?? {}),
     },
-    isOnboardingCompleted: data.isOnboardingCompleted ?? true,
-    onboardingStep: typeof data.onboardingStep === 'number' ? data.onboardingStep : undefined,
   };
+
+  if (data.name !== undefined) updateData.name = data.name?.trim();
+  if (data.gender !== undefined) updateData.gender = data.gender;
+  if (data.conditions !== undefined) updateData.conditions = data.conditions;
+  if (data.languages !== undefined) updateData.languages = data.languages;
+  if (data.isOnboardingCompleted !== undefined) updateData.isOnboardingCompleted = data.isOnboardingCompleted;
+
+  const onboardingStep = buildOnboardingStep(data);
+  if (onboardingStep !== undefined) {
+    updateData.onboardingStep = onboardingStep;
+  }
 
   if (data.dateOfBirth) {
     updateData.dateOfBirth = new Date(data.dateOfBirth);
@@ -286,7 +369,258 @@ export const saveOnboardingProfile = async (
     throw new Error("Failed to save onboarding profile");
   }
 
+  // Create or update separate invitation records for easy lookups
+  if (data.caregivers && data.caregivers.length > 0) {
+    for (const caregiver of data.caregivers) {
+      await syncCaregiverInvitationRecord(String(updatedUser._id), updatedUser.name || "Patient", caregiver, updateData.caregivers || []);
+    }
+  }
+
   return updatedUser.toObject();
+};
+
+const syncCaregiverInvitationRecord = async (
+  senderId: string,
+  senderName: string,
+  caregiver: OnboardingCaregiverInput,
+  linkedCaregiverIds: any[]
+) => {
+  try {
+    const normalizedPhone = normalizePhone(caregiver.phoneNumber);
+    const caregiverLookup = await User.findOne({ phone: normalizedPhone }).select("_id").lean();
+
+    await CaregiverInvitation.findOneAndUpdate(
+      { senderUserId: senderId, caregiverPhone: normalizedPhone },
+      {
+        caregiverUserId: caregiverLookup?._id,
+        status: linkedCaregiverIds.some(id => String(id) === String(caregiverLookup?._id || "")) ? "accepted" : "invited",
+        message: caregiver.relation ? `${senderName} added you as their ${caregiver.relation}` : undefined,
+      },
+      { upsert: true, new: true }
+    );
+
+    // Notify caregiver if they are already a registered user
+    if (caregiverLookup?._id) {
+      emitToUser(String(caregiverLookup._id), "new-caregiver-invitation", {
+        senderId: senderId,
+        senderName: senderName,
+      });
+    }
+  } catch (error) {
+    console.error("Failed to sync CaregiverInvitation record:", error);
+  }
+};
+
+export const upsertCaregiverInvitation = async (
+  userId: string,
+  caregiver: OnboardingCaregiverInput
+) => {
+  const user = await User.findById(userId).select("name caregiverContacts caregivers").lean();
+
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  const normalizedPhone = normalizePhone(caregiver.phoneNumber);
+
+  if (!/^[6-9]\d{9}$/.test(normalizedPhone)) {
+    throw new Error("Caregiver phone number is invalid.");
+  }
+
+  const existingContact = (user.caregiverContacts || []).find(
+    (contact: any) => contact.phoneNumber === normalizedPhone
+  );
+  const nextContact = await buildCaregiverContact(userId, caregiver, existingContact);
+
+  if (!nextContact.userId) {
+    nextContact.inviteStatus = "invite_sent";
+  }
+
+  const caregiverContacts = [
+    ...(user.caregiverContacts || []).filter((contact: any) => contact.phoneNumber !== normalizedPhone),
+    nextContact,
+  ];
+  const caregivers = Array.from(
+    new Set(
+      caregiverContacts
+        .filter((c: any) => c.inviteStatus === "accepted")
+        .map((contact: any) => (contact.userId ? String(contact.userId) : null))
+        .filter(Boolean)
+    )
+  );
+
+  const updatedUser = await User.findByIdAndUpdate(
+    userId,
+    { $set: { caregiverContacts, caregivers } },
+    { new: true }
+  )
+    .select("-password -__v")
+    .populate([{ path: "roles", select: "name" }]);
+
+  if (!updatedUser) {
+    throw new Error("Failed to save caregiver invitation");
+  }
+
+  // Create or update a separate invitation record for easy lookups
+  await syncCaregiverInvitationRecord(String(updatedUser._id), updatedUser.name || "Patient", caregiver, caregivers);
+
+  return updatedUser.toObject();
+}
+
+export const getInvitationsForUserByPhone = async (phone: string) => {
+  const normalizedPhone = normalizePhone(phone);
+  if (!normalizedPhone) return [];
+
+  const invitations = await CaregiverInvitation.find({
+    caregiverPhone: normalizedPhone,
+    status: "invited",
+  })
+    .populate({
+      path: "senderUserId",
+      select: "name phone",
+    })
+    .lean();
+
+  return invitations.map((inv: any) => ({
+    _id: inv._id,
+    senderId: inv.senderUserId?._id,
+    senderName: inv.senderUserId?.name,
+    senderPhone: inv.senderUserId?.phone,
+    caregiverPhone: inv.caregiverPhone,
+    status: inv.status,
+    message: inv.message,
+    createdAt: inv.createdAt,
+  }));
+};
+
+export const respondToCaregiverInvitationById = async (
+  caregiverUserId: string,
+  invitationId: string,
+  status: "accepted" | "rejected"
+) => {
+  const invitation = await CaregiverInvitation.findById(invitationId);
+  if (!invitation) {
+    throw new Error("Invitation not found");
+  }
+
+  // Update invitation status
+  invitation.status = status;
+  invitation.caregiverUserId = new mongoose.Types.ObjectId(caregiverUserId);
+  await invitation.save();
+
+  // Update both Users through existing respondToCaregiverInvitation logic
+  return await respondToCaregiverInvitation(caregiverUserId, {
+    patientUserId: String(invitation.senderUserId),
+    status,
+  });
+};
+
+export const removeCaregiverInvitation = async (userId: string, phoneNumber: string) => {
+  const normalizedPhone = normalizePhone(phoneNumber);
+  const user = await User.findById(userId).select("caregiverContacts caregivers").lean();
+
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  const caregiverContacts = (user.caregiverContacts || []).filter(
+    (contact: any) => contact.phoneNumber !== normalizedPhone
+  );
+  const caregivers = Array.from(
+    new Set(
+      caregiverContacts
+        .map((contact: any) => (contact.userId ? String(contact.userId) : null))
+        .filter(Boolean)
+    )
+  );
+
+  const updatedUser = await User.findByIdAndUpdate(
+    userId,
+    { $set: { caregiverContacts, caregivers } },
+    { new: true }
+  )
+    .select("-password -__v")
+    .populate([{ path: "roles", select: "name" }]);
+
+  if (!updatedUser) {
+    throw new Error("Failed to remove caregiver");
+  }
+
+  return updatedUser.toObject();
+};
+
+export const respondToCaregiverInvitation = async (
+  caregiverUserId: string,
+  data: CaregiverInvitationStatusInput
+) => {
+  if (!data.patientUserId || !data.status) {
+    throw new Error("Patient and status are required");
+  }
+
+  const caregiverUser = await User.findById(caregiverUserId).select("phone").lean();
+  if (!caregiverUser) {
+    throw new Error("Caregiver user not found");
+  }
+
+  const patient = await User.findById(data.patientUserId).select("caregiverContacts caregivers");
+  if (!patient) {
+    throw new Error("Patient not found");
+  }
+
+  const normalizedPhone = normalizePhone(caregiverUser.phone);
+  const caregiverContacts = (patient.caregiverContacts || []).map((contact: any) => {
+    if (contact.phoneNumber !== normalizedPhone && String(contact.userId || "") !== caregiverUserId) {
+      return contact;
+    }
+
+    return {
+      ...(typeof contact.toObject === "function" ? contact.toObject() : contact),
+      userId: caregiverUserId,
+      verificationStatus: "verified_user",
+      inviteStatus: data.status,
+    };
+  });
+
+  const caregivers = data.status === "accepted"
+    ? Array.from(new Set([...(patient.caregivers || []).map((id: any) => String(id)), caregiverUserId]))
+    : (patient.caregivers || []).map((id: any) => String(id)).filter((id: string) => id !== caregiverUserId);
+
+  patient.set({ caregiverContacts, caregivers });
+  await patient.save();
+
+  const res = await User.findByIdAndUpdate(data.patientUserId, { 
+    $set: { caregiverContacts, caregivers } 
+  }, { new: true })
+  .select("-password -__v")
+  .populate([{ path: "roles", select: "name" }]);
+
+  if (!res) {
+    throw new Error("Failed to update caregiver invitation status");
+  }
+
+  // Also update Caregiver's managedPatients list
+  const caregiver = await User.findById(caregiverUserId);
+  if (caregiver) {
+    if (data.status === "accepted") {
+      const managedPatients = Array.from(new Set([
+        ...(caregiver.managedPatients || []).map(id => String(id)),
+        String(data.patientUserId)
+      ]));
+      caregiver.managedPatients = managedPatients as any;
+    } else {
+      caregiver.managedPatients = (caregiver.managedPatients || []).filter(id => String(id) !== String(data.patientUserId));
+    }
+    await caregiver.save();
+  }
+
+  // Notify patient in real-time
+  emitToUser(String(data.patientUserId), "caregiver-invitation-response", {
+    caregiverUserId,
+    status: data.status,
+    caregiverName: caregiver?.name
+  });
+
+  return res.toObject();
 };
 
 /**

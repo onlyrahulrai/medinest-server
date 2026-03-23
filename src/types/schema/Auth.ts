@@ -17,6 +17,11 @@ export interface OnboardingCaregiverInput {
   relation?: string;
 }
 
+export interface CaregiverInvitationStatusInput {
+  patientUserId?: string;
+  status?: "accepted" | "rejected";
+}
+
 export interface OnboardingPreferencesInput {
   reminderTimes?: string[];
   soundEnabled?: boolean;
@@ -43,6 +48,8 @@ export interface CaregiverLookupResponse {
   name?: string;
   phoneNumber?: string;
   isPhoneVerified?: boolean;
+  conflict?: boolean;
+  conflictMessage?: string;
 }
 
 export interface EditProfileInput {
