@@ -35,6 +35,10 @@ export interface IUser extends Document {
   caregivers?: mongoose.Types.ObjectId[];
   managedPatients?: mongoose.Types.ObjectId[];
   caregiverContacts?: ICaregiverContact[];
+  globalSchedule?: {
+    times: string[];
+    updatedAt: Date;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -97,6 +101,10 @@ const UserSchema: Schema = new Schema(
     caregiverContacts: {
       type: [CaregiverContactSchema],
       default: [],
+    },
+    globalSchedule: {
+      times: { type: [String], default: ["09:00", "21:00"] },
+      updatedAt: { type: Date, default: Date.now },
     },
     isPhoneVerified: {
       type: Boolean,
