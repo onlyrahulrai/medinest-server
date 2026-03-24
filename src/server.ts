@@ -8,6 +8,8 @@ import swaggerUi from "swagger-ui-express";
 import swaggerDocument from "../dist/swagger.json" assert { type: "json" };
 import "./workers";
 import { serverAdapter as bullBoardAdapter } from "./jobs/bullBoard";
+import { setupReminderJob } from "./jobs/reminderJob";
+import { setupLogGenerationJob } from "./jobs/logGenerationJob";
 import "./helper/utils/promiseAny";
 import { expressAuthentication } from "./auth/expressAuthentication";
 import optionalAuth from "./middleware/optionalAuth";
@@ -201,6 +203,8 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
 
 (async () => {
   await connectDB();
+  await setupReminderJob();
+  await setupLogGenerationJob();
   server.listen(PORT, () => {
     console.log(`🚀 Server running at http://localhost:${PORT}`.blue.bold);
   });

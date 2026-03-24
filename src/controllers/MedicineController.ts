@@ -15,7 +15,7 @@ import {
   Query,
 } from "tsoa";
 import * as MedicineService from "../services/medicineService";
-import { CreateMedicineInput, UpdateMedicineInput, MedicineResponse, MedicineLogInput } from "../types/schema/Medicine";
+import { CreateMedicineInput, UpdateMedicineInput, MedicineResponse } from "../types/schema/Medicine";
 import { ErrorMessageResponse, SuccessMessageResponse } from "../types/schema/Common";
 
 @Route("medicines")
@@ -140,30 +140,6 @@ export class MedicineController extends Controller {
     } catch (error: any) {
       this.setStatus(400);
       return { message: error.message || "Failed to delete medicine" };
-    }
-  }
-
-  /**
-   * Log an intake event for tracking adherence.
-   */
-  @Post("{id}/take")
-  public async logIntake(
-    @Request() req: any,
-    @Path() id: string,
-    @Body() body: MedicineLogInput
-  ): Promise<MedicineResponse | ErrorMessageResponse> {
-    try {
-      const userId = req.user?._id;
-      if (!userId) {
-        this.setStatus(401);
-        throw new Error("Unauthorized");
-      }
-
-      this.setStatus(200);
-      return await MedicineService.logMedicineIntake(String(userId), id, body) as any;
-    } catch (error: any) {
-      this.setStatus(400);
-      return { message: error.message || "Failed to log intake" };
     }
   }
 }

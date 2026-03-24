@@ -25,6 +25,7 @@ export interface IUser extends Document {
   conditions?: string[];
   isOnboardingCompleted?: boolean;
   onboardingStep?: number;
+  routinesEnabled?: boolean;
   languages?: string[];
   preferences?: {
     reminderTimes?: string[];
@@ -81,6 +82,7 @@ const UserSchema: Schema = new Schema(
     conditions: { type: [String] },
     isOnboardingCompleted: { type: Boolean, default: false },
     onboardingStep: { type: Number, default: 0 },
+    routinesEnabled: { type: Boolean, default: false },
     languages: { type: [String] },
     roles: [{
       type: mongoose.Schema.Types.ObjectId,

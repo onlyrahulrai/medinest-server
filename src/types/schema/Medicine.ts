@@ -1,7 +1,14 @@
-export interface MedicineSchedule {
-  times: string[]; // ['08:00', '20:00']
+export interface MedicineDosage {
+  amount: string;
+  unit: string;
+  perIntake: number;
+}
+
+export interface CustomSchedule {
+  enabled: boolean;
+  times: string[];
   frequency: 'daily' | 'weekly' | 'custom' | 'as_needed';
-  daysOfWeek?: number[]; // [0-6] for Sun-Sat
+  daysOfWeek?: number[];
 }
 
 export interface MedicineDuration {
@@ -9,53 +16,74 @@ export interface MedicineDuration {
   endDate?: string; // ISO string
 }
 
-export interface CreateMedicineInput {
-  name: string;
-  type: string; // 'tablet', 'syrup', 'injection', etc.
-  dosage: string; // '500mg', '2ml'
-  dosageUnit?: string;
-  schedule: MedicineSchedule;
-  duration: MedicineDuration;
-  instructions?: string;
-  notes?: string;
-  mealTiming?: string[];
+export interface MedicinePrescription {
   prescribedBy?: string;
   purpose?: string;
+}
+
+export interface MedicineRefill {
+  refillReminder: boolean;
+  totalQuantity: number;
+  remainingQuantity: number;
+  refillAt: number;
+}
+
+export interface CreateMedicineInput {
+  name: string;
+  type: string;
+  dosage: MedicineDosage;
+  routineIds?: string[];
+  customSchedule: CustomSchedule;
+  duration: MedicineDuration;
+  mealTiming?: string[];
+  prescription: MedicinePrescription;
+  notes?: string;
+  instructions?: string;
   color?: string;
   imageUrl?: string;
-  useGlobal: boolean;
-  refillReminder?: boolean;
-  currentSupply?: number;
-  totalSupply?: number;
-  refillAt?: number;
+  refill: MedicineRefill;
   reminderEnabled?: boolean;
   scheduleGroupId?: string;
-  patientId?: string; // Optional target user for caregiver usage
+  patientId?: string;
 }
 
 export interface UpdateMedicineInput extends Partial<CreateMedicineInput> {
   isActive?: boolean;
 }
 
-export interface MedicineLog {
-  takenAt: string;
-  status: 'taken' | 'skipped' | 'missed';
-  notes?: string;
-  loggedBy: string; // userId or 'self'
-}
-
-export interface MedicineResponse extends CreateMedicineInput {
+export interface MedicineLogResponse {
   _id: string;
   userId: string;
-  isActive: boolean;
-  logs: MedicineLog[];
+  medicineId: string;
+  routineId?: string;
+  scheduledTime: string;
+  status: 'pending' | 'taken' | 'skipped' | 'missed';
+  notes?: string;
+  takenAt?: string;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface MedicineLogInput {
-  takenAt: string; // ISO string
-  status: 'taken' | 'skipped' | 'missed';
-  notes?: string;
-  loggedBy: string;
+export interface MedicineResponse extends Omit<CreateMedicineInput, 'routineIds'> {
+  _id: string;
+  userId: string;
+  routineIds: any[]; // Populated routines
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AddRoutineInput {
+  name: string;
+  time: string;
+}
+
+export interface RoutineResponse {
+  _id: string;
+  userId: string;
+  name: string;
+  time: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
