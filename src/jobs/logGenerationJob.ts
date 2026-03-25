@@ -15,7 +15,7 @@ export const setupLogGenerationJob = async () => {
 export const processLogGeneration = async () => {
   console.log('[LogEngine] Starting daily log generation for all active medicines');
   const activeMedicines = await Medicine.find({ isActive: true });
-  
+
   for (const medicine of activeMedicines) {
     try {
       // Generate logs for next 7 days (to keep them rolling)
