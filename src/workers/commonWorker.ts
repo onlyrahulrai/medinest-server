@@ -3,6 +3,7 @@ import { Worker, Job } from "bullmq";
 import unirest from "unirest";
 
 import { processReminders } from "../services/reminderService";
+import { processLogGeneration } from '../jobs/logGenerationJob';
 
 const sendOtp = async ({ contacts, otp }: { contacts: Array<number>, otp: number }) => {
     try {
@@ -45,7 +46,6 @@ const worker = new Worker(
         }
 
         if (job.name === 'generate-logs') {
-            const { processLogGeneration } = require('../jobs/logGenerationJob');
             await processLogGeneration();
         }
     },
