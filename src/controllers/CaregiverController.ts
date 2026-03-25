@@ -67,7 +67,7 @@ export class CaregiverController extends Controller {
   }
 
   @Security("jwt")
-  @Get("invitations")
+  @Get("/")
   @SuccessResponse(200, "Invitations retrieved")
   @Response<AuthenticationRequiredResponse>(401, "Authentication required")
   public async getInvitations(
@@ -76,10 +76,12 @@ export class CaregiverController extends Controller {
   ): Promise<any> {
     try {
       const userPhone = phone || req.user?.phone;
+
       if (!userPhone) {
         this.setStatus(400);
         return { message: "Phone number is required" };
       }
+
       this.setStatus(200);
       return await AuthService.getInvitationsForUserByPhone(userPhone);
     } catch (error: any) {

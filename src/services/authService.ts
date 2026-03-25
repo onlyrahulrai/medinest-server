@@ -1,34 +1,24 @@
 import bcrypt from "bcryptjs";
 import { Queue } from "bullmq";
 import jwt from "jsonwebtoken";
-import mongoose from "mongoose";
 import { generateToken } from "../helper/utils/common";
-import { CaregiverInvitationStatusInput, CaregiverLookupResponse, EditProfileInput, OnboardingCaregiverInput, SaveOnboardingProfileInput } from "../types/schema/Auth";
-import { emitToUser } from "../helper/utils/socket";
+import { EditProfileInput } from "../types/schema/Auth";
 import User from "../models/User";
-import CaregiverInvitation from "../models/CaregiverInvitation";
+import CaregiverInvitationModel from "../models/CaregiverInvitation";
+import CaregiverModel from "../models/Caregiver";
 import Role from "../models/Role";
 import { TokenBlacklist } from "../models/TokenBlacklist";
 import OTPGenerator from "otp-generator";
 import OTP from "../models/OTP";
+import mongoose from "mongoose";
+import { emitToUser } from "../helper/utils/socket";
+import { CaregiverInvitationStatusInput, CaregiverLookupResponse, OnboardingCaregiverInput } from "../types/schema/Auth";
 
-const myCommonQueue = new Queue("SS-CommonTask");
+const myCommonQueue = new Queue("medinest-CommonTask");
 
 const normalizePhone = (phone?: string) => phone?.replace(/\D/g, "") ?? "";
 
 const ACTIVE_INVITE_STATUSES = ["pending_invite", "invite_sent", "accepted"] as const;
-
-const buildOnboardingStep = (data: SaveOnboardingProfileInput) => {
-  if (data.isOnboardingCompleted) {
-    return 4;
-  }
-
-  if (typeof data.onboardingStep === "number") {
-    return Math.min(Math.max(data.onboardingStep, 1), 4);
-  }
-
-  return undefined;
-};
 
 const buildConflictQuery = (currentUserId: string, phoneNumber: string) => ({
   _id: { $ne: currentUserId },
@@ -132,10 +122,20 @@ export const loginWithOtp = async (phone: string, otp: string) => {
     // Delete the OTP record once verified
     await OTP.deleteOne({ _id: otpRecord._id });
 
+    let shouldSync = false;
+
     // Auto-verify phone number on successful OTP login
     if (!user.verified) {
       user.verified = true;
+      shouldSync = true;
       await user.save();
+    }
+
+    if (shouldSync) {
+      await myCommonQueue.add("sync-caregiver-data", {
+        phone: user.phone,
+        userId: user._id,
+      });
     }
 
     const payload = {
@@ -187,10 +187,47 @@ export const editUserProfile = async (_id: string, data: EditProfileInput) => {
   try {
     const updateData: any = { ...data };
 
-    console.log("Updated Data: ", updateData);
-
     if (data.phone) {
       updateData.verified = true;
+    }
+
+    // ----------------------------------
+    // ✅ Caregiver Invitation Flow
+    // ----------------------------------
+    if (data.caregivers && data.caregivers.length > 0) {
+      for (const caregiver of data.caregivers) {
+        const phone = caregiver.phone?.trim();
+
+        if (!phone) continue;
+
+        // 🔍 Check if user exists
+        const existingUser = await User.findOne({ phone }).select("_id");
+
+        // ----------------------------------
+        // 1. Create Invitation
+        // ----------------------------------
+        await CaregiverInvitationModel.create({
+          senderUserId: _id,
+          receiverPhone: phone,
+          receiverUserId: existingUser?._id || null,
+          status: "pending",
+        });
+
+        // ----------------------------------
+        // 2. Create Relation (Pending)
+        // ----------------------------------
+        await CaregiverModel.create({
+          user: _id,
+          caregiver: existingUser?._id || null,
+          caregiverName: caregiver.name,
+          caregiverPhone: phone,
+          relation: caregiver.relation,
+          status: existingUser ? "pending_invite" : "unregistered",
+          invitedAt: new Date(),
+        });
+
+        // 👉 Optional: Trigger notification
+      }
     }
 
     const user = await User.findByIdAndUpdate(_id, { $set: updateData }, { new: true }).select("-password -__v").populate([
@@ -218,6 +255,32 @@ export const editUserProfile = async (_id: string, data: EditProfileInput) => {
     return { ...user.toObject(), access, refresh };
   } catch (error: any) {
     throw new Error(error.message || "Failed to edit user profile");
+  }
+};
+
+/**
+ * Logout by blacklisting the current JWT token.
+ */
+export const logout = async (req: any) => {
+  try {
+    const authHeader = req.headers["authorization"];
+    if (!authHeader) throw new Error("No token provided");
+
+    const token = authHeader.split(" ")[1];
+    if (!token) throw new Error("Invalid token format");
+
+    const decoded: any = jwt.decode(token);
+    if (!decoded || !decoded.exp) throw new Error("Invalid token");
+
+    await TokenBlacklist.create({
+      token,
+      user: decoded._id || undefined,
+      reason: "LOGOUT",
+      expiresAt: new Date(decoded.exp * 1000),
+    });
+  } catch (error) {
+    console.error("Logout service error:", error);
+    throw error;
   }
 };
 
@@ -268,7 +331,7 @@ const buildCaregiverContact = async (
   caregiver: OnboardingCaregiverInput,
   existingContact?: Record<string, any>
 ) => {
-  const normalizedPhone = normalizePhone(caregiver.phoneNumber);
+  const normalizedPhone = normalizePhone(caregiver.phone || "");
 
   if (!normalizedPhone) {
     throw new Error("Caregiver phone number is required");
@@ -299,85 +362,6 @@ const buildCaregiverContact = async (
   };
 };
 
-export const saveOnboardingProfile = async (
-  userId: string,
-  data: SaveOnboardingProfileInput
-) => {
-  const existingUser = await User.findById(userId).select("preferences caregiverContacts").lean();
-
-  if (!existingUser) {
-    throw new Error("User not found");
-  }
-
-  const existingContacts = existingUser.caregiverContacts || [];
-
-  const caregiverContacts = data.caregivers === undefined
-    ? existingContacts
-    : await Promise.all(
-      data.caregivers.map(async (caregiver) => {
-        const normalizedPhone = normalizePhone(caregiver.phoneNumber);
-        const existingContact = existingContacts.find((contact: any) => contact.phoneNumber === normalizedPhone);
-
-        return buildCaregiverContact(userId, caregiver, existingContact);
-      })
-    );
-
-  const linkedCaregiverIds = caregiverContacts
-    .filter(c => c.inviteStatus === "accepted")
-    .map((caregiver) => caregiver.userId)
-    .filter(Boolean);
-
-  const updateData: Record<string, any> = {
-    caregiverContacts,
-    caregivers: linkedCaregiverIds,
-    preferences: {
-      ...(existingUser.preferences ?? {}),
-      ...(data.preferences ?? {}),
-    },
-  };
-
-  if (data.name !== undefined) updateData.name = data.name?.trim();
-  if (data.gender !== undefined) updateData.gender = data.gender;
-  if (data.conditions !== undefined) updateData.conditions = data.conditions;
-  if (data.languages !== undefined) updateData.languages = data.languages;
-  if (data.isOnboardingCompleted !== undefined) updateData.isOnboardingCompleted = data.isOnboardingCompleted;
-
-  const onboardingStep = buildOnboardingStep(data);
-  if (onboardingStep !== undefined) {
-    updateData.onboardingStep = onboardingStep;
-  }
-
-  if (data.dateOfBirth) {
-    updateData.dateOfBirth = new Date(data.dateOfBirth);
-  }
-
-  if (data.weight !== undefined && data.weight !== "") {
-    updateData.weight = Number(data.weight);
-  }
-
-  const updatedUser = await User.findByIdAndUpdate(userId, { $set: updateData }, { new: true })
-    .select("-password -__v")
-    .populate([
-      {
-        path: "roles",
-        select: "name",
-      },
-    ]);
-
-  if (!updatedUser) {
-    throw new Error("Failed to save onboarding profile");
-  }
-
-  // Create or update separate invitation records for easy lookups
-  if (data.caregivers && data.caregivers.length > 0) {
-    for (const caregiver of data.caregivers) {
-      await syncCaregiverInvitationRecord(String(updatedUser._id), updatedUser.name || "Patient", caregiver, updateData.caregivers || []);
-    }
-  }
-
-  return updatedUser.toObject();
-};
-
 const syncCaregiverInvitationRecord = async (
   senderId: string,
   senderName: string,
@@ -385,13 +369,13 @@ const syncCaregiverInvitationRecord = async (
   linkedCaregiverIds: any[]
 ) => {
   try {
-    const normalizedPhone = normalizePhone(caregiver.phoneNumber);
+    const normalizedPhone = normalizePhone(caregiver.phone || "");
     const caregiverLookup = await User.findOne({ phone: normalizedPhone }).select("_id").lean();
 
-    await CaregiverInvitation.findOneAndUpdate(
-      { senderUserId: senderId, caregiverPhone: normalizedPhone },
+    await CaregiverInvitationModel.findOneAndUpdate(
+      { senderUserId: senderId, receiverPhone: normalizedPhone },
       {
-        caregiverUserId: caregiverLookup?._id,
+        receiverUserId: caregiverLookup?._id,
         status: linkedCaregiverIds.some(id => String(id) === String(caregiverLookup?._id || "")) ? "accepted" : "invited",
         message: caregiver.relation ? `${senderName} added you as their ${caregiver.relation}` : undefined,
       },
@@ -420,7 +404,7 @@ export const upsertCaregiverInvitation = async (
     throw new Error("User not found");
   }
 
-  const normalizedPhone = normalizePhone(caregiver.phoneNumber);
+  const normalizedPhone = normalizePhone(caregiver.phone || "");
 
   if (!/^[6-9]\d{9}$/.test(normalizedPhone)) {
     throw new Error("Caregiver phone number is invalid.");
@@ -464,15 +448,15 @@ export const upsertCaregiverInvitation = async (
   await syncCaregiverInvitationRecord(String(updatedUser._id), updatedUser.name || "Patient", caregiver, caregivers);
 
   return updatedUser.toObject();
-}
+};
 
 export const getInvitationsForUserByPhone = async (phone: string) => {
   const normalizedPhone = normalizePhone(phone);
   if (!normalizedPhone) return [];
 
-  const invitations = await CaregiverInvitation.find({
-    caregiverPhone: normalizedPhone,
-    status: "invited",
+  const invitations = await CaregiverInvitationModel.find({
+    receiverPhone: normalizedPhone,
+    status: "pending",
   })
     .populate({
       path: "senderUserId",
@@ -485,7 +469,7 @@ export const getInvitationsForUserByPhone = async (phone: string) => {
     senderId: inv.senderUserId?._id,
     senderName: inv.senderUserId?.name,
     senderPhone: inv.senderUserId?.phone,
-    caregiverPhone: inv.caregiverPhone,
+    receiverPhone: inv.receiverPhone,
     status: inv.status,
     message: inv.message,
     createdAt: inv.createdAt,
@@ -497,14 +481,14 @@ export const respondToCaregiverInvitationById = async (
   invitationId: string,
   status: "accepted" | "rejected"
 ) => {
-  const invitation = await CaregiverInvitation.findById(invitationId);
+  const invitation = await CaregiverInvitationModel.findById(invitationId);
   if (!invitation) {
     throw new Error("Invitation not found");
   }
 
   // Update invitation status
   invitation.status = status;
-  invitation.caregiverUserId = new mongoose.Types.ObjectId(caregiverUserId);
+  invitation.receiverUserId = new mongoose.Types.ObjectId(caregiverUserId);
   await invitation.save();
 
   // Update both Users through existing respondToCaregiverInvitation logic
@@ -514,20 +498,29 @@ export const respondToCaregiverInvitationById = async (
   });
 };
 
-export const removeCaregiverInvitation = async (userId: string, phoneNumber: string) => {
-  const normalizedPhone = normalizePhone(phoneNumber);
+export const removeCaregiverInvitation = async (userId: string, targetId: string) => {
   const user = await User.findById(userId).select("caregiverContacts caregivers").lean();
 
   if (!user) {
     throw new Error("User not found");
   }
 
+  // targetId can be a phone number or a userId
+  const isPhone = /^\d{10}$/.test(targetId.replace(/\D/g, ""));
+  const normalizedPhone = isPhone ? normalizePhone(targetId) : null;
+
   const caregiverContacts = (user.caregiverContacts || []).filter(
-    (contact: any) => contact.phoneNumber !== normalizedPhone
+    (contact: any) => {
+        if (normalizedPhone && contact.phoneNumber === normalizedPhone) return false;
+        if (String(contact.userId || "") === targetId) return false;
+        return true;
+    }
   );
+  
   const caregivers = Array.from(
     new Set(
       caregiverContacts
+        .filter((c: any) => c.inviteStatus === "accepted")
         .map((contact: any) => (contact.userId ? String(contact.userId) : null))
         .filter(Boolean)
     )
@@ -556,7 +549,7 @@ export const respondToCaregiverInvitation = async (
     throw new Error("Patient and status are required");
   }
 
-  const caregiverUser = await User.findById(caregiverUserId).select("phone").lean();
+  const caregiverUser = await User.findById(caregiverUserId).select("phone name").lean();
   if (!caregiverUser) {
     throw new Error("Caregiver user not found");
   }
@@ -576,7 +569,7 @@ export const respondToCaregiverInvitation = async (
       ...(typeof contact.toObject === "function" ? contact.toObject() : contact),
       userId: caregiverUserId,
       verificationStatus: "verified_user",
-      inviteStatus: data.status,
+      inviteStatus: data.status === "accepted" ? "accepted" : "rejected",
     };
   });
 
@@ -616,34 +609,8 @@ export const respondToCaregiverInvitation = async (
   emitToUser(String(data.patientUserId), "caregiver-invitation-response", {
     caregiverUserId,
     status: data.status,
-    caregiverName: caregiver?.name
+    caregiverName: caregiverUser?.name
   });
 
   return res.toObject();
-};
-
-/**
- * Logout by blacklisting the current JWT token.
- */
-export const logout = async (req: any) => {
-  try {
-    const authHeader = req.headers["authorization"];
-    if (!authHeader) throw new Error("No token provided");
-
-    const token = authHeader.split(" ")[1];
-    if (!token) throw new Error("Invalid token format");
-
-    const decoded: any = jwt.decode(token);
-    if (!decoded || !decoded.exp) throw new Error("Invalid token");
-
-    await TokenBlacklist.create({
-      token,
-      user: decoded._id || undefined,
-      reason: "LOGOUT",
-      expiresAt: new Date(decoded.exp * 1000),
-    });
-  } catch (error) {
-    console.error("Logout service error:", error);
-    throw error;
-  }
 };

@@ -7,4 +7,4 @@ const connection = {
     },
 };
 
-export const commonQueue = new Queue('SS-CommonTask', connection);
+export const commonQueue = new Queue('Medinest-CommonTask', connection);

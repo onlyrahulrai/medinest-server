@@ -4,6 +4,7 @@ import unirest from "unirest";
 
 import { processReminders } from "../services/reminderService";
 import { processLogGeneration } from '../jobs/logGenerationJob';
+import { syncCaregiverData } from "../helper/utils/common";
 
 const sendOtp = async ({ contacts, otp }: { contacts: Array<number>, otp: number }) => {
     try {
@@ -33,7 +34,7 @@ const sendOtp = async ({ contacts, otp }: { contacts: Array<number>, otp: number
 }
 
 const worker = new Worker(
-    "SS-CommonTask",
+    "Medinest-CommonTask",
     async (job: { name: string; data: any }) => {
         console.log("----- Job Executed -----")
 
@@ -47,6 +48,10 @@ const worker = new Worker(
 
         if (job.name === 'generate-logs') {
             await processLogGeneration();
+        }
+
+        if (job.name === 'sync-caregiver-data') {
+            await syncCaregiverData(job.data);
         }
     },
     {
