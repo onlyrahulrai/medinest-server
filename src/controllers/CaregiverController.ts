@@ -11,13 +11,14 @@ import {
   Security,
   SuccessResponse,
   Tags,
+  Path,
 } from "tsoa";
 import * as AuthService from "../services/authService";
 import { AuthenticationRequiredResponse, CaregiverLookupResponse, OnboardingCaregiverInput } from "../types/schema/Auth";
 import { UserDetailsResponse } from "../types/schema/User";
 import { ErrorMessageResponse } from "../types/schema/Common";
 
-@Route("caregivers")
+@Route("caregiver")
 @Tags("Caregivers")
 export class CaregiverController extends Controller {
   @Security("jwt")
@@ -28,7 +29,7 @@ export class CaregiverController extends Controller {
   public async upsertInvitation(
     @Request() req: any,
     @Body() body: OnboardingCaregiverInput
-  ): Promise<UserDetailsResponse | AuthenticationRequiredResponse | ErrorMessageResponse> {
+  ): Promise<any> {
     try {
       const userId = req.user?._id;
       if (!userId) {
@@ -36,7 +37,7 @@ export class CaregiverController extends Controller {
         return { message: "Authentication required" };
       }
       this.setStatus(200);
-      return (await AuthService.upsertCaregiverInvitation(String(userId), body)) as any;
+      return await AuthService.upsertCaregiverInvitation(String(userId), body);
     } catch (error: any) {
       this.setStatus(400);
       return { message: error?.message || "Invalid request" };
@@ -44,30 +45,7 @@ export class CaregiverController extends Controller {
   }
 
   @Security("jwt")
-  @Delete("remove")
-  @SuccessResponse(200, "Caregiver removed")
-  @Response<AuthenticationRequiredResponse>(401, "Authentication required")
-  @Response<ErrorMessageResponse>(400, "Invalid request parameters")
-  public async removeCaregiver(
-    @Request() req: any,
-    @Query() phoneNumber: string
-  ): Promise<UserDetailsResponse | AuthenticationRequiredResponse | ErrorMessageResponse> {
-    try {
-      const userId = req.user?._id;
-      if (!userId) {
-        this.setStatus(401);
-        return { message: "Authentication required" };
-      }
-      this.setStatus(200);
-      return (await AuthService.removeCaregiverInvitation(String(userId), phoneNumber)) as any;
-    } catch (error: any) {
-      this.setStatus(400);
-      return { message: error?.message || "Invalid request" };
-    }
-  }
-
-  @Security("jwt")
-  @Get("/")
+  @Get("invitations")
   @SuccessResponse(200, "Invitations retrieved")
   @Response<AuthenticationRequiredResponse>(401, "Authentication required")
   public async getInvitations(
@@ -76,12 +54,10 @@ export class CaregiverController extends Controller {
   ): Promise<any> {
     try {
       const userPhone = phone || req.user?.phone;
-
       if (!userPhone) {
         this.setStatus(400);
         return { message: "Phone number is required" };
       }
-
       this.setStatus(200);
       return await AuthService.getInvitationsForUserByPhone(userPhone);
     } catch (error: any) {
@@ -91,12 +67,12 @@ export class CaregiverController extends Controller {
   }
 
   @Security("jwt")
-  @Post("invitation-response")
-  @SuccessResponse(200, "Invitation response saved")
+  @Post("invitations/{id}/accept")
+  @SuccessResponse(200, "Invitation accepted")
   @Response<AuthenticationRequiredResponse>(401, "Authentication required")
-  public async respondToInvitation(
+  public async acceptInvitation(
     @Request() req: any,
-    @Body() body: { invitationId: string; status: "accepted" | "rejected" }
+    @Path() id: string
   ): Promise<any> {
     try {
       const userId = req.user?._id;
@@ -105,7 +81,51 @@ export class CaregiverController extends Controller {
         return { message: "Authentication required" };
       }
       this.setStatus(200);
-      return await AuthService.respondToCaregiverInvitationById(String(userId), body.invitationId, body.status);
+      return await AuthService.respondToCaregiverInvitationById(String(userId), id, "accepted");
+    } catch (error: any) {
+      this.setStatus(400);
+      return { message: error?.message || "Invalid request" };
+    }
+  }
+
+  @Security("jwt")
+  @Post("invitations/{id}/reject")
+  @SuccessResponse(200, "Invitation rejected")
+  @Response<AuthenticationRequiredResponse>(401, "Authentication required")
+  public async rejectInvitation(
+    @Request() req: any,
+    @Path() id: string
+  ): Promise<any> {
+    try {
+      const userId = req.user?._id;
+      if (!userId) {
+        this.setStatus(401);
+        return { message: "Authentication required" };
+      }
+      this.setStatus(200);
+      return await AuthService.respondToCaregiverInvitationById(String(userId), id, "rejected");
+    } catch (error: any) {
+      this.setStatus(400);
+      return { message: error?.message || "Invalid request" };
+    }
+  }
+
+  @Security("jwt")
+  @Delete("{id}")
+  @SuccessResponse(200, "Caregiver removed")
+  @Response<AuthenticationRequiredResponse>(401, "Authentication required")
+  public async removeCaregiver(
+    @Request() req: any,
+    @Path() id: string
+  ): Promise<any> {
+    try {
+      const userId = req.user?._id;
+      if (!userId) {
+        this.setStatus(401);
+        return { message: "Authentication required" };
+      }
+      this.setStatus(200);
+      return await AuthService.removeCaregiver(String(userId), id);
     } catch (error: any) {
       this.setStatus(400);
       return { message: error?.message || "Invalid request" };
