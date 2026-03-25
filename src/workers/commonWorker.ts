@@ -1,5 +1,9 @@
-import { Worker } from "bullmq";
+import { Worker, Job } from "bullmq";
+// @ts-ignore
 import unirest from "unirest";
+
+import { processReminders } from "../services/reminderService";
+import { processLogGeneration } from '../jobs/logGenerationJob';
 
 const sendOtp = async ({ contacts, otp }: { contacts: Array<number>, otp: number }) => {
     try {
@@ -17,13 +21,13 @@ const sendOtp = async ({ contacts, otp }: { contacts: Array<number>, otp: number
             "msg": `OTP for login your account ${otp} and valid till 2 minutes. Do not share this OTP to anyone for security reasons. Via DigiDonar`
         });
 
-        req.end(function (res) {
+        req.end(function (res: any) {
 
             if (res.error) throw new Error(res.error);
 
             console.log(res.body);
         });
-    } catch (error) {
+    } catch (error: any) {
         console.log("Error: ", error)
     }
 }
@@ -35,6 +39,14 @@ const worker = new Worker(
 
         if (job.name === 'send-verification-otp') {
             await sendOtp(job.data);
+        }
+
+        if (job.name === 'process-reminders') {
+            await processReminders();
+        }
+
+        if (job.name === 'generate-logs') {
+            await processLogGeneration();
         }
     },
     {
@@ -49,6 +61,6 @@ worker.on("completed", (job: { data: any }) => {
     console.log(`✅ Common task completed`);
 });
 
-worker.on("failed", (job: { data: any }, err: any) => {
-    console.error(`❌ Failed to send email to ${job?.data?.to}:`, err);
+worker.on("failed", (job: Job | undefined, err: any) => {
+    console.error(`❌ Failed job ${job?.id}:`, err);
 });

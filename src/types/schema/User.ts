@@ -45,8 +45,21 @@ export interface UserDetailsResponse {
   isEmailVerified?: boolean;
   isPhoneVerified?: boolean;
   roles?: any;
+  globalSchedule?: {
+    times: string[];
+    updatedAt: string | Date;
+  };
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface GlobalScheduleResponse {
+  times: string[];
+  updatedAt: string | Date;
+}
+
+export interface UpdateGlobalScheduleInput {
+  times: string[];
 }
 
 export interface UserListResponse {

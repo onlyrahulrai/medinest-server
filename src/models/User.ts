@@ -1,115 +1,110 @@
 import mongoose, { Schema, Document } from "mongoose";
 
-export interface ICaregiverContact {
-  userId?: mongoose.Types.ObjectId;
-  name?: string;
-  phoneNumber?: string;
-  relation?: string;
-  verificationStatus?: "verified_user" | "unregistered_contact" | "verification_pending";
-  inviteStatus?: "not_required" | "pending_invite" | "invite_sent" | "accepted" | "expired" | "rejected";
+interface IProfile {
+  pic: string;
+  bio: string;
+  address: string;
+  dateOfBirth: Date;
+  gender: "Male" | "Female" | "Other";
+  allergies: string[];
+  conditions: string[];
+  bloodGroup: string;
+  weight: number;
+  height: number;
 }
 
 export interface IUser extends Document {
   name?: string;
-  email?: string;
   phone?: string;
-  profile?: string;
-  bio?: string;
-  address?: string;
+  email?: string;
   roles?: mongoose.Types.ObjectId[];
-  isActive?: boolean;
-  isPhoneVerified?: boolean;
-  dateOfBirth?: Date;
-  weight?: number;
-  gender?: "Male" | "Female" | "Other";
-  conditions?: string[];
-  isOnboardingCompleted?: boolean;
-  onboardingStep?: number;
+  onboarding?: {
+    completed: boolean;
+    step: number;
+  };
+  profile?: IProfile;
   languages?: string[];
   preferences?: {
-    reminderTimes?: string[];
     soundEnabled?: boolean;
     vibrationEnabled?: boolean;
     shareActivityWithCaregiver?: boolean;
   };
-  caregivers?: mongoose.Types.ObjectId[];
-  managedPatients?: mongoose.Types.ObjectId[];
-  caregiverContacts?: ICaregiverContact[];
+  verified?: boolean;
+  routinesEnabled?: boolean;
+  deletedAt?: Date;
+  isActive?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
 
-const CaregiverContactSchema = new Schema<ICaregiverContact>(
-  {
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
-    name: { type: String },
-    phoneNumber: { type: String },
-    relation: { type: String },
-    verificationStatus: {
-      type: String,
-      enum: ["verified_user", "unregistered_contact", "verification_pending"],
-      default: "verification_pending",
-    },
-    inviteStatus: {
-      type: String,
-      enum: ["not_required", "pending_invite", "invite_sent", "accepted", "expired", "rejected"],
-      default: "pending_invite",
-    },
-  },
-  { _id: false }
-);
-
 const UserSchema: Schema = new Schema(
   {
-    name: { type: String },
-    email: { type: String },
+    name: { type: String, trim: true },
+
     phone: {
       type: String,
       unique: true,
-      required: true
+      required: true,
+      index: true,
     },
-    profile: { type: String },
-    bio: { type: String },
-    address: { type: String },
-    dateOfBirth: { type: Date },
-    weight: { type: Number },
-    gender: { type: String, enum: ["Male", "Female", "Other"] },
-    conditions: { type: [String] },
-    isOnboardingCompleted: { type: Boolean, default: false },
-    onboardingStep: { type: Number, default: 0 },
-    languages: { type: [String] },
+
+    email: { type: String, lowercase: true, trim: true, },
+
     roles: [{
       type: mongoose.Schema.Types.ObjectId,
       ref: "Role",
     }],
+
+    onboarding: {
+      completed: { type: Boolean, default: false },
+      step: { type: Number, default: 0 },
+    },
+
+    profile: {
+      pic: String,
+      bio: { type: String },
+      address: { type: String },
+      dateOfBirth: { type: Date },
+      gender: { type: String, enum: ["Male", "Female", "Other"] },
+
+      allergies: [String],
+      conditions: { type: [String] },
+
+      bloodGroup: {
+        type: String,
+        enum: ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"]
+      },
+
+      weight: { type: Number, min: 0 },
+      height: { type: Number, min: 0 },
+    },
+
+    languages: { type: [String] },
+
     preferences: {
-      type: Object,
-      default: {}
+      soundEnabled: { type: Boolean, default: true },
+      vibrationEnabled: { type: Boolean, default: true },
+      shareActivityWithCaregiver: { type: Boolean, default: false },
     },
-    caregivers: {
-      type: [mongoose.Schema.Types.ObjectId],
-      ref: "User",
-    },
-    managedPatients: {
-      type: [mongoose.Schema.Types.ObjectId],
-      ref: "User",
-    },
-    caregiverContacts: {
-      type: [CaregiverContactSchema],
-      default: [],
-    },
-    isPhoneVerified: {
+
+    verified: {
       type: Boolean,
       default: false,
     },
+
+    routinesEnabled: { type: Boolean, default: true },
+
+    deletedAt: { type: Date, default: null },
+
     isActive: {
       type: Boolean,
       default: true,
     },
-    deletedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
+
+UserSchema.index({ "onboarding.completed": 1 });
 
 const User = mongoose.model<IUser>("User", UserSchema);
 
