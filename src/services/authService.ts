@@ -15,6 +15,7 @@ import OTP from "../models/OTP";
 const myCommonQueue = new Queue("SS-CommonTask");
 
 const normalizePhone = (phone?: string) => phone?.replace(/\D/g, "") ?? "";
+
 const ACTIVE_INVITE_STATUSES = ["pending_invite", "invite_sent", "accepted"] as const;
 
 const buildOnboardingStep = (data: SaveOnboardingProfileInput) => {
@@ -49,14 +50,13 @@ export const sendPhoneOtp = async (phone?: string) => {
     let user = await User.findOne({ phone });
 
     if (!user) {
-      const role = await Role.findOne({ name: "User" });
+      const role = await Role.findOne({ name: "Patient" });
 
-      if (!role) throw new Error("Default role 'User' not found");
+      if (!role) throw new Error("Default role 'Patient' not found");
 
       user = await new User({
         name: "",
         phone,
-        isPhoneVerified: false,
         roles: [role._id],
       }).save();
     }
@@ -133,8 +133,8 @@ export const loginWithOtp = async (phone: string, otp: string) => {
     await OTP.deleteOne({ _id: otpRecord._id });
 
     // Auto-verify phone number on successful OTP login
-    if (!user.isPhoneVerified) {
-      user.isPhoneVerified = true;
+    if (!user.verified) {
+      user.verified = true;
       await user.save();
     }
 
@@ -166,10 +166,6 @@ export const getUserDetails = async (userId: string) => {
       {
         path: "roles",
         select: "name",
-      },
-      {
-        path: "managedPatients",
-        select: "name phone",
       }
     ]);
 
@@ -191,8 +187,10 @@ export const editUserProfile = async (_id: string, data: EditProfileInput) => {
   try {
     const updateData: any = { ...data };
 
+    console.log("Updated Data: ", updateData);
+
     if (data.phone) {
-      updateData.isPhoneVerified = true;
+      updateData.verified = true;
     }
 
     const user = await User.findByIdAndUpdate(_id, { $set: updateData }, { new: true }).select("-password -__v").populate([
@@ -249,7 +247,7 @@ export const lookupCaregiverByPhone = async (
   }
 
   const user = await User.findOne({ phone: normalizedPhone })
-    .select("_id name phone isPhoneVerified")
+    .select("_id name phone verified")
     .lean();
 
   if (!user || String(user._id) === currentUserId) {
@@ -261,7 +259,7 @@ export const lookupCaregiverByPhone = async (
     userId: String(user._id),
     name: user.name,
     phoneNumber: user.phone,
-    isPhoneVerified: user.isPhoneVerified,
+    verified: user.verified,
   };
 };
 
@@ -284,11 +282,11 @@ const buildCaregiverContact = async (
 
   const linkedUser = lookup.found
     ? {
-        _id: lookup.userId,
-        name: lookup.name,
-        phone: lookup.phoneNumber,
-        isPhoneVerified: lookup.isPhoneVerified,
-      }
+      _id: lookup.userId,
+      name: lookup.name,
+      phone: lookup.phoneNumber,
+      verified: lookup.verified,
+    }
     : null;
 
   return {
@@ -312,16 +310,17 @@ export const saveOnboardingProfile = async (
   }
 
   const existingContacts = existingUser.caregiverContacts || [];
+
   const caregiverContacts = data.caregivers === undefined
     ? existingContacts
     : await Promise.all(
-        data.caregivers.map(async (caregiver) => {
-          const normalizedPhone = normalizePhone(caregiver.phoneNumber);
-          const existingContact = existingContacts.find((contact: any) => contact.phoneNumber === normalizedPhone);
+      data.caregivers.map(async (caregiver) => {
+        const normalizedPhone = normalizePhone(caregiver.phoneNumber);
+        const existingContact = existingContacts.find((contact: any) => contact.phoneNumber === normalizedPhone);
 
-          return buildCaregiverContact(userId, caregiver, existingContact);
-        })
-      );
+        return buildCaregiverContact(userId, caregiver, existingContact);
+      })
+    );
 
   const linkedCaregiverIds = caregiverContacts
     .filter(c => c.inviteStatus === "accepted")
@@ -588,11 +587,11 @@ export const respondToCaregiverInvitation = async (
   patient.set({ caregiverContacts, caregivers });
   await patient.save();
 
-  const res = await User.findByIdAndUpdate(data.patientUserId, { 
-    $set: { caregiverContacts, caregivers } 
+  const res = await User.findByIdAndUpdate(data.patientUserId, {
+    $set: { caregiverContacts, caregivers }
   }, { new: true })
-  .select("-password -__v")
-  .populate([{ path: "roles", select: "name" }]);
+    .select("-password -__v")
+    .populate([{ path: "roles", select: "name" }]);
 
   if (!res) {
     throw new Error("Failed to update caregiver invitation status");

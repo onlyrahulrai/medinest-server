@@ -2,27 +2,95 @@ import { validatePhone, validateEmail, validateString } from "./common";
 import User from "../../models/User";
 import { SaveOnboardingProfileInput } from "../../types/schema/Auth";
 
-export const validateEditProfile = async (userId: string, values: Record<string, any>) => {
-  let errors = validateEmail({}, values);
-  validateString(errors, values, "name", { required: true });
-  validatePhone(errors, values);
+export const validateEditProfile = async (
+  userId: string,
+  values: Record<string, any>
+) => {
+  const errors: Record<string, any> = {};
 
-  const existingEmailUser = await User.findOne({
-    email: values.email,
-    _id: { $ne: userId }
-  });
+  const email = values?.email?.trim().toLowerCase();
+  const phone = values?.phone?.trim();
 
-  const existingPhoneUser = await User.findOne({
-    phone: values.phone,
-    _id: { $ne: userId }
-  });
-
-  if (existingEmailUser) {
-    errors.email = "This email is already in use";
+  // -------------------------
+  // Step 1: Basic validation
+  // -------------------------
+  if (email) {
+    validateEmail(errors, { ...values, email });
   }
 
-  if (existingPhoneUser) {
-    errors.phone = "This phone number is already in use";
+  if (phone) {
+    validatePhone(errors, { ...values, phone });
+  }
+
+  // -------------------------
+  // Step 2: DB validation
+  // -------------------------
+  if (Object.keys(errors).length === 0) {
+    const [existingEmailUser, existingPhoneUser] = await Promise.all([
+      email
+        ? User.findOne({ email, _id: { $ne: userId } }).select("_id")
+        : null,
+      phone
+        ? User.findOne({ phone, _id: { $ne: userId } }).select("_id")
+        : null,
+    ]);
+
+    if (existingEmailUser) {
+      errors.email = "This email is already in use";
+    }
+
+    if (existingPhoneUser) {
+      errors.phone = "This phone number is already in use";
+    }
+  }
+
+  // -------------------------
+  // Step 3: Caregiver validation
+  // -------------------------
+  if (values?.caregivers?.length) {
+    const caregiverErrors: any[] = [];
+    const seenPhones = new Set<string>();
+
+    values.caregivers.forEach((caregiver: Record<string, any>, index: number) => {
+      const error: Record<string, string> = {};
+
+      const caregiverPhone = caregiver?.phone?.trim();
+
+      // Normalize before validation
+      validatePhone(error, { phone: caregiverPhone });
+
+      validateString(error, { name: caregiver.name }, "name", {
+        required: true,
+        minLength: 2,
+      });
+
+      validateString(error, { relation: caregiver.relation }, "relation", {
+        required: true,
+        minLength: 2,
+      });
+
+      // ❗ Duplicate inside caregivers
+      if (caregiverPhone) {
+        if (seenPhones.has(caregiverPhone)) {
+          error.phone = "Duplicate caregiver phone number";
+        }
+        seenPhones.add(caregiverPhone);
+      }
+
+      // ❗ Same as user phone
+      if (phone && caregiverPhone === phone) {
+        error.phone = "Caregiver phone cannot be same as user's phone";
+      }
+
+      // Maintain index alignment
+      caregiverErrors[index] =
+        Object.keys(error).length > 0 ? error : null;
+    });
+
+    // Only attach if any errors exist
+    if (caregiverErrors.some((err) => err !== null)) {
+      errors.caregivers = caregiverErrors;
+    }
   }
 
   return errors;

@@ -1,6 +1,8 @@
 import { ErrorMessageResponse } from "./Common";
 import { UserDetailsResponse } from "./User";
+import { IProfile } from "../../models/User";
 import mongoose from "mongoose";
+
 
 export interface VerifyPhoneInput {
   phone?: string;
@@ -11,22 +13,9 @@ export interface ResendPhoneOtpInput {
   phone?: string;
 }
 
-export interface OnboardingCaregiverInput {
-  name?: string;
-  phoneNumber?: string;
-  relation?: string;
-}
-
 export interface CaregiverInvitationStatusInput {
   patientUserId?: string;
   status?: "accepted" | "rejected";
-}
-
-export interface OnboardingPreferencesInput {
-  reminderTimes?: string[];
-  soundEnabled?: boolean;
-  vibrationEnabled?: boolean;
-  shareActivityWithCaregiver?: boolean;
 }
 
 export interface SaveOnboardingProfileInput {
@@ -47,18 +36,37 @@ export interface CaregiverLookupResponse {
   userId?: string | mongoose.Types.ObjectId;
   name?: string;
   phoneNumber?: string;
-  isPhoneVerified?: boolean;
+  verified?: boolean;
   conflict?: boolean;
   conflictMessage?: string;
 }
 
+export interface OnboardingCaregiverInput {
+  name?: string;
+  phone?: string;
+  relation?: string;
+}
+
+export interface OnboardingPreferencesInput {
+  soundEnabled?: boolean;
+  vibrationEnabled?: boolean;
+  shareActivityWithCaregiver?: boolean;
+}
+
 export interface EditProfileInput {
   name?: string;
-  email?: string;
   phone?: string;
-  profile?: any;
-  bio?: string;
-  address?: string;
+  email?: string;
+  onboarding: {
+    completed?: boolean;
+    step?: number;
+  },
+  profile?: Partial<IProfile>;
+  languages?: string[];
+  preferences?: OnboardingPreferencesInput;
+  caregivers?: OnboardingCaregiverInput[];
+  verified?: boolean;
+  routinesEnabled?: boolean;
 }
 
 export interface AuthUserResponse extends UserDetailsResponse {

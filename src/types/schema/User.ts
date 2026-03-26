@@ -43,7 +43,7 @@ export interface UserDetailsResponse {
   caregiverContacts?: CaregiverContactResponse[];
   isActive?: boolean;
   isEmailVerified?: boolean;
-  isPhoneVerified?: boolean;
+  verified?: boolean;
   roles?: any;
   globalSchedule?: {
     times: string[];

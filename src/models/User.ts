@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document } from "mongoose";
 
-interface IProfile {
+export interface IProfile {
   pic: string;
   bio: string;
   address: string;
