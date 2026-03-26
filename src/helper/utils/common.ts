@@ -46,6 +46,8 @@ export const formatFile = (file: Express.Multer.File, baseUrl: string) => {
   };
 };
 
+export const normalizePhone = (phone?: string) => phone?.replace(/\D/g, "") ?? "";
+
 export const syncCaregiverData = async (data: { phone: string, userId: string }) => {
   const { phone, userId } = data;
 
