@@ -7,173 +7,27 @@ import { CreateCaregiverRequest, UpdateCaregiverRequest } from "../types/schema/
 import { normalizePhone } from "../helper/utils/common";
 import mongoose from "mongoose";
 
-// export const lookupCaregiverByPhone = async (
-//   phoneNumber: string,
-//   currentUserId?: string
-// ): Promise<CaregiverLookupResponse> => {
-//   try {
-//     const normalizedPhone = normalizePhone(phoneNumber);
+export const getInvitationsForUserByPhone = async (phone: string) => {
+  try {
+    const normalizedPhone = normalizePhone(phone);
 
-//     if (!normalizedPhone) {
-//       throw new Error("Phone number is required");
-//     }
+    if (!normalizedPhone) return [];
 
-//     if (currentUserId) {
-//       const conflictingUser = await User.findOne()
-//         .select("name")
-//         .lean();
+    const invitations = await CaregiverInvitationModel.find({
+      receiverPhone: normalizedPhone,
+      status: "pending",
+    }).select("_id senderUserId receiverPhone status message createdAt")
+      .populate({
+        path: "senderUserId",
+        select: "name phone",
+      })
+      .lean();
 
-//       if (conflictingUser) {
-//         return {
-//           found: false,
-//           phoneNumber: normalizedPhone,
-//           conflict: true,
-//           conflictMessage: "This caregiver is already linked to another patient.",
-//         };
-//       }
-//     }
-
-//     const user = await User.findOne({ phone: normalizedPhone })
-//       .select("_id name phone verified")
-//       .lean();
-
-//     if (!user || String(user._id) === currentUserId) {
-//       return { found: false, phoneNumber: normalizedPhone };
-//     }
-
-//     return {
-//       found: true,
-//       userId: String(user._id),
-//       name: user.name,
-//       phoneNumber: user.phone,
-//       verified: user.verified,
-//     };
-//   } catch (error: any) {
-//     throw new Error(error.message || "Failed to lookup caregiver");
-//   }
-// };
-
-// export const getInvitationsForUserByPhone = async (phone: string) => {
-//   try {
-//     const normalizedPhone = normalizePhone(phone);
-//     if (!normalizedPhone) return [];
-
-//     const invitations = await CaregiverInvitationModel.find({
-//       receiverPhone: normalizedPhone,
-//       status: "pending",
-//     })
-//       .populate({
-//         path: "senderUserId",
-//         select: "name phone",
-//       })
-//       .lean();
-
-//     return invitations.map((inv: any) => ({
-//       _id: inv._id,
-//       senderId: inv.senderUserId?._id,
-//       senderName: inv.senderUserId?.name,
-//       senderPhone: inv.senderUserId?.phone,
-//       receiverPhone: inv.receiverPhone,
-//       status: inv.status,
-//       message: inv.message,
-//       createdAt: inv.createdAt,
-//     }));
-//   } catch (error: any) {
-//     throw new Error(error.message || "Failed to fetch invitations");
-//   }
-// };
-
-// export const respondToCaregiverInvitationById = async (
-//   caregiverUserId: string,
-//   invitationId: string,
-//   status: "accepted" | "rejected"
-// ) => {
-//   const session = await mongoose.startSession();
-//   session.startTransaction();
-
-//   try {
-//     const invitation = await CaregiverInvitationModel.findById(invitationId).session(session);
-
-//     if (!invitation) {
-//       throw new Error("Invitation not found");
-//     }
-
-//     if (
-//       invitation.receiverUserId &&
-//       invitation.receiverUserId.toString() !== caregiverUserId
-//     ) {
-//       throw new Error("Unauthorized action");
-//     }
-
-//     if (!["pending"].includes(invitation.status)) {
-//       throw new Error("Invitation already handled");
-//     }
-
-//     if (invitation.expiresAt && invitation.expiresAt < new Date()) {
-//       throw new Error("Invitation expired");
-//     }
-
-//     invitation.status = status;
-//     invitation.receiverUserId = new mongoose.Types.ObjectId(caregiverUserId);
-//     invitation.respondedAt = new Date();
-//     await invitation.save({ session });
-
-//     const relation = await CaregiverModel.findOneAndUpdate(
-//       {
-//         user: invitation.senderUserId,
-//         caregiverPhone: invitation.receiverPhone,
-//         status: { $in: ["pending_invite", "unregistered"] },
-//       },
-//       {
-//         caregiver: new mongoose.Types.ObjectId(caregiverUserId),
-//         status: status,
-//         respondedAt: new Date(),
-//       },
-//       { new: true, session }
-//     );
-
-//     if (!relation) {
-//       throw new Error("Caregiver relation not found");
-//     }
-
-//     if (status === "accepted") {
-//       await CaregiverInvitationModel.updateMany(
-//         {
-//           _id: { $ne: invitation._id },
-//           senderUserId: invitation.senderUserId,
-//           receiverPhone: invitation.receiverPhone,
-//           status: "pending",
-//         },
-//         {
-//           $set: {
-//             status: "expired",
-//             respondedAt: new Date(),
-//           },
-//         },
-//         { session }
-//       );
-//     }
-
-//     await session.commitTransaction();
-//     session.endSession();
-
-//     const caregiverUser = await User.findById(caregiverUserId)
-//       .select("name")
-//       .lean();
-
-//     emitToUser(String(invitation.senderUserId), "caregiver-invitation-response", {
-//       caregiverUserId,
-//       status,
-//       caregiverName: caregiverUser?.name,
-//     });
-
-//     return relation;
-//   } catch (error: any) {
-//     await session.abortTransaction();
-//     session.endSession();
-//     throw new Error(error.message || "Failed to respond to invitation");
-//   }
-// };
+    return invitations;
+  } catch (error: any) {
+    throw new Error(error.message || "Failed to fetch invitations");
+  }
+};
 
 export const respondToCaregiverInvitationById = async (
   caregiverUserId: string,
