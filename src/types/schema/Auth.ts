@@ -61,6 +61,7 @@ export interface EditProfileInput {
     completed?: boolean;
     step?: number;
   },
+  routines?: any;
   profile?: Partial<IProfile>;
   languages?: string[];
   preferences?: OnboardingPreferencesInput;

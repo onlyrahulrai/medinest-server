@@ -9,6 +9,9 @@ import OTPGenerator from "otp-generator";
 import OTP from "../models/OTP";
 import * as CaregiverService from "./caregiverService";
 import { EditProfileInput } from "../types/schema/Auth";
+import CaregiverInvitationModel from "../models/CaregiverInvitation";
+import CaregiverModel from "../models/Caregiver";
+import RoutineModel from "../models/Routine";
 
 const myCommonQueue = new Queue("medinest-CommonTask");
 
@@ -169,6 +172,8 @@ export const editUserProfile = async (_id: string, data: EditProfileInput) => {
   try {
     const updateData: any = { ...data };
 
+    console.log("Editing user profile with data:", data);
+
     if (data.phone) {
       updateData.verified = true;
     }
@@ -178,9 +183,67 @@ export const editUserProfile = async (_id: string, data: EditProfileInput) => {
     // ----------------------------------
     if (data.caregivers && data.caregivers.length > 0) {
       for (const caregiver of data.caregivers) {
-        await CaregiverService.upsertCaregiverInvitation(_id, caregiver);
+        const phone = caregiver.phone?.trim();
+
+        if (!phone) continue;
+
+        // 🔍 Check if user exists
+        const existingUser = await User.findOne({ phone }).select("_id");
+
+        // ----------------------------------
+        // 1. Create Invitation
+        // ----------------------------------
+        await CaregiverInvitationModel.create({
+          senderUserId: _id,
+          receiverPhone: phone,
+          receiverUserId: existingUser?._id || null,
+          status: "pending",
+        });
+
+        // ----------------------------------
+        // 2. Create Relation (Pending)
+        // ----------------------------------
+        await CaregiverModel.create({
+          user: _id,
+          caregiver: existingUser?._id || null,
+          caregiverName: caregiver.name,
+          caregiverPhone: phone,
+          relation: caregiver.relation,
+          status: existingUser ? "pending_invite" : "unregistered",
+          invitedAt: new Date(),
+        });
+
+        // 👉 Optional: Trigger notification
       }
     }
+
+    if (data.routines) {
+      // For simplicity, we'll replace all existing routines with the new ones from the request
+      for (const routine of data.routines) {
+        if (routine._id) {
+          // Update existing routine
+          await RoutineModel.findOneAndUpdate(
+            { _id: routine._id, user: _id },
+            { $set: routine },
+            { new: true }
+          );
+        } else {
+          // Create new routine
+          await RoutineModel.create({
+            ...routine,
+            user: _id,
+          });
+        }
+      }
+    } else if (data.routines === null) {
+      // If routines is explicitly set to null, delete all routines for the user
+      await RoutineModel.deleteMany({ user: _id });
+    }
+
+    // ----------------------------------
+    // 3. Sync Caregiver Data if Phone Updated
+    // ----------------------------------
+    // TODO: Optimize to only sync if phone number is changed and verified
 
     const user = await User.findByIdAndUpdate(_id, { $set: updateData }, { new: true }).select("-password -__v").populate([
       {
