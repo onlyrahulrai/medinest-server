@@ -7,7 +7,6 @@ import Role from "../models/Role";
 import { TokenBlacklist } from "../models/TokenBlacklist";
 import OTPGenerator from "otp-generator";
 import OTP from "../models/OTP";
-import * as CaregiverService from "./caregiverService";
 import { EditProfileInput } from "../types/schema/Auth";
 import CaregiverInvitationModel from "../models/CaregiverInvitation";
 import CaregiverModel from "../models/Caregiver";
@@ -154,11 +153,14 @@ export const getUserDetails = async (userId: string) => {
       }
     ]);
 
+    const routines = await RoutineModel.find({ user: userId }).select("name time");
+
+
     if (!user) {
       throw new Error("We couldn't find an account matching those details.");
     }
 
-    return user.toObject();
+    return { ...user.toObject(), routines };
   } catch (error: any) {
     throw new Error(error.message || "Failed to fetch user details");
   }
@@ -217,26 +219,56 @@ export const editUserProfile = async (_id: string, data: EditProfileInput) => {
       }
     }
 
+    const userRoutines = await RoutineModel.find({ user: _id }).select("_id");
+
+    const existingIds = userRoutines.map((r) => r._id.toString());
+    const incomingIds = (data.routines || [])
+      .filter((r: any) => r._id)
+      .map((r: any) => r._id.toString());
+
+    // 🔥 Find deleted routines
+    const deletedRoutineIds = existingIds.filter(
+      (id) => !incomingIds.includes(id)
+    );
+
+    // 🔥 Prepare bulk operations
+    const operations = [];
+
     if (data.routines) {
-      // For simplicity, we'll replace all existing routines with the new ones from the request
       for (const routine of data.routines) {
         if (routine._id) {
-          // Update existing routine
-          await RoutineModel.findOneAndUpdate(
-            { _id: routine._id, user: _id },
-            { $set: routine },
-            { new: true }
-          );
+          // UPDATE
+          operations.push({
+            updateOne: {
+              filter: { _id: routine._id, user: _id },
+              update: { $set: routine },
+            },
+          });
         } else {
-          // Create new routine
-          await RoutineModel.create({
-            ...routine,
-            user: _id,
+          // CREATE
+          operations.push({
+            insertOne: {
+              document: { ...routine, user: _id },
+            },
           });
         }
       }
-    } else if (data.routines === null) {
-      // If routines is explicitly set to null, delete all routines for the user
+    }
+
+    // 🔥 Execute all updates in ONE query
+    if (operations.length > 0) {
+      await RoutineModel.bulkWrite(operations);
+    }
+
+    // 🔥 Delete removed routines
+    if (deletedRoutineIds.length > 0) {
+      await RoutineModel.deleteMany({
+        _id: { $in: deletedRoutineIds },
+      });
+    }
+
+    // 🔥 Handle null case
+    if (data.routines === null) {
       await RoutineModel.deleteMany({ user: _id });
     }
 
