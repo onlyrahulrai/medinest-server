@@ -24,7 +24,7 @@ import { CreateCaregiverRequest, UpdateCaregiverRequest, RespondInvitationReques
 import { validateManageCaregiver, validateUpdateCaregiver } from "../helper/validators/caregiver";
 
 @Route("caregiver")
-@Tags("Caregiver")
+@Tags("Caregiver Management")
 export class CaregiverController extends Controller {
 
   /** Get caregivers for a patient */
@@ -51,6 +51,36 @@ export class CaregiverController extends Controller {
       return { message: error?.message || "Failed to retrieve caregivers" };
     }
   }
+
+  /** Get invitations for current user (acting as caregiver) */
+  @Get("invitations")
+  @Security("jwt")
+  @SuccessResponse(200, "Invitations retrieved")
+  @Response<ErrorMessageResponse>(401, "Authentication required")
+  public async getInvitations(
+    @Request() req: any,
+    @Query() phone?: string
+  ): Promise<any> {
+    try {
+      // const userPhone = phone || req.user?.phone;
+
+      console.log("Fetching invitations for phone:", phone);
+
+      if (!phone) {
+        this.setStatus(400);
+        return { message: "Phone number is required" };
+      }
+
+      this.setStatus(200);
+      return await CaregiverService.getInvitationsForUserByPhone(phone);
+    } catch (error: any) {
+      console.error("Error fetching invitations:", error);
+
+      this.setStatus(400);
+      return { message: error?.message || "Invalid request" };
+    }
+  }
+
   /** Get caregivers for a patient */
   @Get("/:caregiverId")
   @Security("jwt")
@@ -169,29 +199,6 @@ export class CaregiverController extends Controller {
     } catch (error: any) {
       this.setStatus(400);
       return { message: error?.message || "Failed to remove caregiver" };
-    }
-  }
-
-  /** Get invitations for current user (acting as caregiver) */
-  @Get("invitations")
-  @Security("jwt")
-  @SuccessResponse(200, "Invitations retrieved")
-  @Response<ErrorMessageResponse>(401, "Authentication required")
-  public async getInvitations(
-    @Request() req: any,
-    @Query() phone?: string
-  ): Promise<any> {
-    try {
-      const userPhone = phone || req.user?.phone;
-      if (!userPhone) {
-        this.setStatus(400);
-        return { message: "Phone number is required" };
-      }
-      this.setStatus(200);
-      return await CaregiverService.getInvitationsForUserByPhone(userPhone);
-    } catch (error: any) {
-      this.setStatus(400);
-      return { message: error?.message || "Invalid request" };
     }
   }
 
