@@ -1,6 +1,6 @@
 import CaregiverModel from "../models/Caregiver";
 import { UpdateCaregiverRequest } from "../types/schema/Caregiver";
-import mongoose from "mongoose";
+
 
 export const getRelations = async (userId: string, role?: string) => {
   try {
@@ -81,7 +81,7 @@ export const getRelationDetails = async (userId: string, relationId: string) => 
 
 export const updateRelation = async (userId: string, relationId: string, payload: UpdateCaregiverRequest) => {
   try {
-    const { caregiverName, relation, permissions } = payload;
+    const { caregiverName, relation } = payload;
 
     const caregiver = await CaregiverModel.findOne({ _id: relationId, user: userId });
 
@@ -92,13 +92,6 @@ export const updateRelation = async (userId: string, relationId: string, payload
     if (caregiverName !== undefined) caregiver.caregiverName = caregiverName;
 
     if (relation !== undefined) caregiver.relation = relation;
-
-    if (permissions) {
-      caregiver.permissions = {
-        ...caregiver.permissions,
-        ...permissions
-      };
-    }
 
     await caregiver.save();
 
@@ -141,44 +134,5 @@ export const removeRelation = async (
     return { message: "Caregiver relation removed successfully" };
   } catch (error: any) {
     throw new Error(error.message || "Failed to remove caregiver");
-  }
-};
-
-export const createRelationFromInvitation = async (invitation: any, session: mongoose.ClientSession) => {
-  try {
-    // Create relation using data from invitation
-    const relation = new CaregiverModel({
-      user: invitation.senderUserId,
-      caregiver: invitation.receiverUserId,
-      caregiverName: invitation.caregiverName,
-      caregiverPhone: invitation.receiverPhone,
-      relation: invitation.relation,
-      status: "accepted",
-      invitedAt: invitation.createdAt,
-      respondedAt: new Date(),
-    });
-
-    await relation.save({ session });
-
-    // Expire other pending invites
-    await mongoose.model("CaregiverInvitation").updateMany(
-      {
-        _id: { $ne: invitation._id },
-        senderUserId: invitation.senderUserId,
-        receiverPhone: invitation.receiverPhone,
-        status: "pending",
-      },
-      {
-        $set: {
-          status: "expired",
-          respondedAt: new Date(),
-        },
-      },
-      { session }
-    );
-
-    return relation;
-  } catch (error: any) {
-    throw new Error(error.message || "Failed to create relation from invitation");
   }
 };
