@@ -4,6 +4,8 @@ export interface ICaregiverInvitation extends Document {
   senderUserId: mongoose.Types.ObjectId;
   receiverPhone: string;
   receiverUserId?: mongoose.Types.ObjectId;
+  caregiverName: string;
+  relation: string;
   status: "pending" | "accepted" | "rejected" | "expired";
   message?: string;
   respondedAt?: Date;
@@ -19,6 +21,14 @@ const CaregiverInvitationSchema: Schema = new Schema(
     receiverPhone: { type: String, required: true },
 
     receiverUserId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+
+    caregiverName: { type: String, required: true, trim: true },
+
+    relation: {
+      type: String,
+      enum: ["Father", "Mother", "Brother", "Sister", "Spouse", "Friend", "Other"],
+      required: true
+    },
 
     status: {
       type: String,

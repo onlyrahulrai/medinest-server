@@ -1,44 +1,24 @@
-import User from "../models/User";
-import CaregiverInvitationModel from "../models/CaregiverInvitation";
-import CaregiverModel from "../models/Caregiver";
-import { emitToUser } from "../helper/utils/socket";
-import * as NotificationService from "./notificationService";
-import { CreateCaregiverRequest, UpdateCaregiverRequest } from "../types/schema/Caregiver";
-import { normalizePhone } from "../helper/utils/common";
-import mongoose from "mongoose";
+// This file is deprecated. Logic has been split into:
+// - caregiverInvitationService.ts (for invitation workflow)
+// - caregiverRelationService.ts (for relations management)
 
-export const getInvitationsForUser = async (userId: string, type?: string) => {
-  try {
-    const query: Record<string, any> = {};
+// Keeping this file temporarily for backward compatibility
+// TODO: Remove this file after ensuring all imports are updated
 
-    switch (type) {
-      case "sent":
-        query.senderUserId = userId;
-        break;
-      case "received":
-        query.receiverUserId = userId;
-        break;
-      default:
-        break;
+export * from "./caregiverInvitationService";
+export * from "./caregiverRelationService";
     }
 
-    const invitations = await CaregiverInvitationModel.find(query).select("_id senderUserId receiverUserId receiverPhone status message createdAt")
-      .populate({
-        path: "senderUserId receiverUserId",
-        select: "name phone",
-      })
-      .lean();
-
-    return invitations;
+    return invitation;
   } catch (error: any) {
-    throw new Error(error.message || "Failed to fetch invitations");
+    throw new Error(error.message || "Failed to fetch invitation");
   }
 };
 
 export const respondToCaregiverInvitationById = async (
   caregiverUserId: string,
   invitationId: string,
-  status: "accepted" | "rejected"
+  action: "accept" | "reject"
 ) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -65,30 +45,28 @@ export const respondToCaregiverInvitationById = async (
       throw new Error("Invitation expired");
     }
 
+    const status = action === "accept" ? "accepted" : "rejected";
     invitation.status = status;
     invitation.receiverUserId = new mongoose.Types.ObjectId(caregiverUserId);
     invitation.respondedAt = new Date();
     await invitation.save({ session });
 
-    const relation = await CaregiverModel.findOneAndUpdate(
-      {
+    let relation = null;
+    if (action === "accept") {
+      // Create relation
+      relation = new CaregiverModel({
         user: invitation.senderUserId,
-        caregiverPhone: invitation.receiverPhone,
-        status: { $in: ["pending_invite", "unregistered"] },
-      },
-      {
         caregiver: new mongoose.Types.ObjectId(caregiverUserId),
-        status: status,
+        caregiverName: "", // Can be updated later
+        caregiverPhone: invitation.receiverPhone,
+        relation: "Other", // Default
+        status: "accepted",
+        invitedAt: invitation.createdAt,
         respondedAt: new Date(),
-      },
-      { new: true, session }
-    );
+      });
+      await relation.save({ session });
 
-    if (!relation) {
-      throw new Error("Caregiver relation not found");
-    }
-
-    if (status === "accepted") {
+      // Expire other pending invites
       await CaregiverInvitationModel.updateMany(
         {
           _id: { $ne: invitation._id },
@@ -115,11 +93,11 @@ export const respondToCaregiverInvitationById = async (
 
     emitToUser(String(invitation.senderUserId), "caregiver-invitation-response", {
       caregiverUserId,
-      status,
+      action,
       caregiverName: caregiverUser?.name,
     });
 
-    return relation;
+    return { invitation, relation };
   } catch (error: any) {
     await session.abortTransaction();
     session.endSession();
@@ -127,49 +105,129 @@ export const respondToCaregiverInvitationById = async (
   }
 };
 
-export const getCaregivers = async (userId: string) => {
+export const resendInvitation = async (userId: string, invitationId: string) => {
   try {
-    const caregivers = await CaregiverModel.find({
-      user: userId,
+    const invitation = await CaregiverInvitationModel.findOne({
+      _id: invitationId,
+      senderUserId: userId,
+      status: { $in: ["pending", "expired"] }
+    });
+
+    if (!invitation) {
+      throw new Error("Invitation not found or cannot be resent");
+    }
+
+    invitation.status = "pending";
+    invitation.expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    invitation.respondedAt = undefined;
+    await invitation.save();
+
+    // Send notification if receiver exists
+    if (invitation.receiverUserId) {
+      await NotificationService.send({
+        userId: invitation.receiverUserId,
+        title: "Caregiver Invitation",
+        message: "You have been invited as a caregiver",
+        type: "system",
+        relatedType: "invitation",
+      });
+
+      emitToUser(String(invitation.receiverUserId), "new-caregiver-invitation", {
+        senderId: userId,
+        senderName: "User", // Can populate
+      });
+    }
+
+    return { message: "Invitation resent successfully" };
+  } catch (error: any) {
+    throw new Error(error.message || "Failed to resend invitation");
+  }
+};
+
+export const deleteInvitation = async (userId: string, invitationId: string) => {
+  try {
+    const invitation = await CaregiverInvitationModel.findOne({
+      _id: invitationId,
+      senderUserId: userId,
+      status: "pending"
+    });
+
+    if (!invitation) {
+      throw new Error("Invitation not found or cannot be deleted");
+    }
+
+    await invitation.deleteOne();
+
+    return { message: "Invitation deleted successfully" };
+  } catch (error: any) {
+    throw new Error(error.message || "Failed to delete invitation");
+  }
+};
+
+export const getRelations = async (userId: string, role?: string) => {
+  try {
+    const query: Record<string, any> = { status: { $ne: "removed" } };
+
+    if (role === "caregiver") {
+      query.caregiver = userId;
+    } else {
+      query.user = userId;
+    }
+
+    const relations = await CaregiverModel.find(query).populate({
+      path: "user caregiver",
+      select: "name phone",
+    }).lean();
+
+    return relations;
+  } catch (error: any) {
+    throw new Error(error.message || "Failed to fetch relations");
+  }
+};
+
+export const getRelationDetails = async (userId: string, relationId: string) => {
+  try {
+    const relation = await CaregiverModel.findOne({
+      _id: relationId,
+      $or: [
+        { user: userId },
+        { caregiver: userId }
+      ],
       status: { $ne: "removed" }
+    }).populate({
+      path: "user caregiver",
+      select: "name phone",
     }).lean();
 
-    return caregivers;
+    if (!relation) {
+      throw new Error("Relation not found or unauthorized");
+    }
+
+    return relation;
   } catch (error: any) {
-    throw new Error(error.message || "Failed to fetch caregivers");
+    throw new Error(error.message || "Failed to fetch relation details");
   }
 };
 
-export const getCaregiverDetails = async (caregiverId: string) => {
+export const createInvitation = async (userId: string, payload: CreateInvitationRequest) => {
   try {
-    const caregiver = await CaregiverModel.findOne({
-      _id: caregiverId,
-    }).lean();
+    const { receiverPhone, message } = payload;
 
-    return caregiver;
-  } catch (error: any) {
-    throw new Error(error.message || "Failed to fetch caregiver");
-  }
-};
-
-export const addCaregiver = async (userId: string, payload: CreateCaregiverRequest) => {
-  try {
-    const { caregiverName, caregiverPhone, relation } = payload;
-
-    const normalizedPhone = normalizePhone(caregiverPhone);
+    const normalizedPhone = normalizePhone(receiverPhone);
 
     if (!normalizedPhone) {
       throw new Error("Phone number is required");
     }
 
-    const existingRelation = await CaregiverModel.findOne({
-      user: userId,
-      caregiverPhone: normalizedPhone,
-      status: { $in: ["pending_invite", "invite_sent", "accepted", "unregistered"] }
-    }).lean();
+    // Check for existing pending invitation
+    const existingInvitation = await CaregiverInvitationModel.findOne({
+      senderUserId: userId,
+      receiverPhone: normalizedPhone,
+      status: "pending"
+    });
 
-    if (existingRelation) {
-      throw new Error("Caregiver with this phone number already exists.");
+    if (existingInvitation) {
+      throw new Error("Pending invitation already exists for this phone number");
     }
 
     const existingUser = await User.findOne({ phone: normalizedPhone }).select("_id name").lean();
@@ -180,28 +238,12 @@ export const addCaregiver = async (userId: string, payload: CreateCaregiverReque
       throw new Error("User not found");
     }
 
-    const status = existingUser ? "invite_sent" : "unregistered";
-
-    const caregiverUserId = existingUser ? existingUser._id : null;
-
-    const caregiver = new CaregiverModel({
-      user: userId,
-      caregiver: caregiverUserId,
-      caregiverName,
-      caregiverPhone: normalizedPhone,
-      relation,
-      status,
-      invitedAt: new Date(),
-    });
-
-    await caregiver.save();
-
     const invitation = new CaregiverInvitationModel({
       senderUserId: userId,
       receiverPhone: normalizedPhone,
-      receiverUserId: caregiverUserId,
+      receiverUserId: existingUser ? existingUser._id : null,
       status: "pending",
-      message: `${patient.name || "A user"} invited you as their ${relation}`,
+      message: message || `${patient.name || "A user"} invited you as their caregiver`,
     });
 
     await invitation.save();
@@ -221,20 +263,20 @@ export const addCaregiver = async (userId: string, payload: CreateCaregiverReque
       });
     }
 
-    return caregiver;
+    return { success: true, message: "Invitation sent successfully", data: invitation };
   } catch (error: any) {
-    throw new Error(error.message || "Failed to add caregiver");
+    throw new Error(error.message || "Failed to create invitation");
   }
 };
 
-export const updateCaregiver = async (userId: string, caregiverId: string, payload: UpdateCaregiverRequest) => {
+export const updateCaregiver = async (userId: string, relationId: string, payload: UpdateCaregiverRequest) => {
   try {
     const { caregiverName, relation, permissions } = payload;
 
-    const caregiver = await CaregiverModel.findOne({ _id: caregiverId, user: userId });
+    const caregiver = await CaregiverModel.findOne({ _id: relationId, user: userId });
 
     if (!caregiver) {
-      throw new Error("Caregiver not found");
+      throw new Error("Caregiver relation not found");
     }
 
     if (caregiverName !== undefined) caregiver.caregiverName = caregiverName;
@@ -265,6 +307,7 @@ export const removeCaregiver = async (
       _id: relationId,
       $or: [
         { user: userId },
+        { caregiver: userId }
       ]
     });
 
@@ -273,42 +316,8 @@ export const removeCaregiver = async (
     }
 
     relation.status = "removed";
-
     relation.respondedAt = new Date();
-
     await relation.save();
-
-    if (relation.user.toString() === userId) {
-      await CaregiverInvitationModel.updateMany(
-        {
-          senderUserId: userId,
-          receiverPhone: relation.caregiverPhone,
-          status: { $in: ["pending", "unregistered"] },
-        },
-        {
-          $set: {
-            status: "expired",
-            respondedAt: new Date(),
-          },
-        }
-      );
-    }
-
-    if (relation.caregiver) {
-      await CaregiverModel.updateMany(
-        {
-          user: relation.caregiver,
-          caregiver: relation.user,
-          status: "accepted",
-        },
-        {
-          $set: {
-            status: "removed",
-            respondedAt: new Date(),
-          },
-        }
-      );
-    }
 
     return { message: "Caregiver relation removed successfully" };
   } catch (error: any) {

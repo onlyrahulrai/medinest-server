@@ -20,6 +20,30 @@ export const validateManageCaregiver = (data: CreateCaregiverRequest) => {
   return errors;
 };
 
+export const validateCreateInvitation = (data: any) => {
+  const errors: Record<string, string> = {};
+
+  console.log("Validating create invitation data:", data);
+
+  if (!data?.caregiverPhone?.trim()) {
+    errors.caregiverPhone = "Caregiver phone is required.";
+  } else if (!/^[6-9]\d{9}$/.test(data.caregiverPhone.trim())) {
+    errors.caregiverPhone = "Invalid caregiver phone number.";
+  }
+
+  if (!data?.caregiverName?.trim()) {
+    errors.caregiverName = "Caregiver name is required.";
+  }
+
+  if (!data?.relation?.trim()) {
+    errors.relation = "Relation is required.";
+  } else if (!["Father", "Mother", "Brother", "Sister", "Spouse", "Friend", "Other"].includes(data.relation)) {
+    errors.relation = "Invalid relation type.";
+  }
+
+  return errors;
+};
+
 export const validateUpdateCaregiver = (data: UpdateCaregiverRequest) => {
   const errors: Record<string, string> = {};
 

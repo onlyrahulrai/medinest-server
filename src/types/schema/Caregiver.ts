@@ -9,8 +9,15 @@ export interface UpdateCaregiverRequest {
   relation?: string;
 }
 
+export interface CreateInvitationRequest {
+  caregiverPhone: string;
+  caregiverName: string;
+  relation: string;
+  message?: string;
+}
+
 export interface RespondInvitationRequest {
-  status: "accepted" | "rejected";
+  action: "accept" | "reject";
 }
 
 export interface CaregiverResponse {

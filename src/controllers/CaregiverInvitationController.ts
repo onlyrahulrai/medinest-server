@@ -2,7 +2,6 @@ import {
     Controller,
     Post,
     Get,
-    Put,
     Delete,
     Query,
     Request,
@@ -13,26 +12,62 @@ import {
     Tags,
     Path,
     Body,
-    Middlewares,
+    Patch,
 } from "tsoa";
-import * as CaregiverService from "../services/caregiverService";
+import * as CaregiverInvitationService from "../services/caregiverInvitationService";
 import { AuthenticationRequiredResponse } from "../types/schema/Auth";
-import { AccessDeniedErrorMessageResponse, ErrorMessageResponse, FieldValidationError } from "../types/schema/Common";
-import { CreateCaregiverRequest, UpdateCaregiverRequest, RespondInvitationRequest } from "../types/schema/Caregiver";
-import { validateManageCaregiver, validateUpdateCaregiver } from "../helper/validators/caregiver";
+import { ErrorMessageResponse, FieldValidationError } from "../types/schema/Common";
+import { RespondInvitationRequest, CreateInvitationRequest } from "../types/schema/Caregiver";
+import { validateCreateInvitation } from "../helper/validators/caregiver";
 
 @Route("caregiver/invitations")
-@Tags("Caregiver Management")
-export class CaregiverController extends Controller {
+@Tags("Caregiver Invitations")
+export class CaregiverInvitationController extends Controller {
 
-    /** Get invitations for current user (acting as caregiver) */
-    @Get("/")
+    /** Create caregiver invitation */
+    @Post()
+    @Security("jwt")
+    @SuccessResponse(201, "Invitation sent successfully")
+    @Response<AuthenticationRequiredResponse>(401, "Authentication required")
+    @Response<FieldValidationError>(422, "Validation Failed")
+    public async createInvitation(
+        @Request() req: any,
+        @Body() body: CreateInvitationRequest
+    ): Promise<any> {
+        try {
+            const userId = req.user?._id;
+
+            if (!userId) {
+                this.setStatus(401);
+                return { message: "Authentication required" };
+            }
+
+            const fields = validateCreateInvitation(body);
+
+            if (Object.keys(fields).length > 0) {
+                this.setStatus(422);
+                return { fields };
+            }
+
+            const result = await CaregiverInvitationService.createInvitation(String(userId), body);
+
+            this.setStatus(201);
+            return result;
+        } catch (error: any) {
+            this.setStatus(400);
+            return { message: error?.message || "Failed to create invitation" };
+        }
+    }
+
+    /** Get invitations for current user */
+    @Get()
     @Security("jwt")
     @SuccessResponse(200, "Invitations retrieved")
     @Response<ErrorMessageResponse>(401, "Authentication required")
     public async getInvitations(
         @Request() req: any,
-        @Query() type?: string,
+        @Query() type?: "incoming" | "sent",
+        @Query() status?: string
     ): Promise<any> {
         try {
             const userId = req.user?._id;
@@ -44,7 +79,7 @@ export class CaregiverController extends Controller {
 
             this.setStatus(200);
 
-            return await CaregiverService.getInvitationsForUser(String(userId), type);
+            return await CaregiverInvitationService.getInvitationsForUser(String(userId), type, status);
         } catch (error: any) {
             console.error("Error fetching invitations:", error);
 
@@ -53,152 +88,110 @@ export class CaregiverController extends Controller {
         }
     }
 
+    /** Get specific invitation */
+    @Get("{id}")
+    @Security("jwt")
+    @SuccessResponse(200, "Invitation retrieved")
+    @Response<ErrorMessageResponse>(401, "Authentication required")
+    @Response<ErrorMessageResponse>(404, "Invitation not found")
+    public async getInvitationById(
+        @Request() req: any,
+        @Path() id: string
+    ): Promise<any> {
+        try {
+            const userId = req.user?._id;
+
+            if (!userId) {
+                this.setStatus(401);
+                return { message: "Authentication required" };
+            }
+
+            this.setStatus(200);
+
+            return await CaregiverInvitationService.getInvitationById(String(userId), id);
+        } catch (error: any) {
+            console.error("Error fetching invitation:", error);
+
+            this.setStatus(400);
+            return { message: error?.message || "Invalid request" };
+        }
+    }
+
     /** Respond to an invitation */
-    @Post("/")
+    @Patch("{id}/respond")
     @Security("jwt")
     @SuccessResponse(200, "Invitation responded successfully")
     @Response<AuthenticationRequiredResponse>(401, "Authentication required")
     public async respondToInvitation(
         @Request() req: any,
-        @Path() invitationId: string,
+        @Path() id: string,
         @Body() body: RespondInvitationRequest
     ): Promise<any> {
         try {
             const userId = req.user?._id;
+
             if (!userId) {
                 this.setStatus(401);
                 return { message: "Authentication required" };
             }
-            if (!body.status || !["accepted", "rejected"].includes(body.status)) {
+
+            if (!body.action || !["accept", "reject"].includes(body.action)) {
                 this.setStatus(400);
-                return { message: "Invalid status" };
+                return { message: "Invalid action" };
             }
+
             this.setStatus(200);
-            return await CaregiverService.respondToCaregiverInvitationById(String(userId), invitationId, body.status);
+            
+            return await CaregiverInvitationService.respondToInvitation(String(userId), id, body.action);
         } catch (error: any) {
             this.setStatus(400);
             return { message: error?.message || "Invalid request" };
         }
     }
 
-    /** Get caregivers for a patient */
-    @Get("/:id")
+    /** Resend invitation */
+    @Post("{id}/resend")
     @Security("jwt")
-    // @Middlewares(requirePermission(PERMISSIONS.CAREGIVER_VIEW))
-    @SuccessResponse(200, "Caregivers retrieved successfully")
+    @SuccessResponse(200, "Invitation resent successfully")
     @Response<AuthenticationRequiredResponse>(401, "Authentication required")
-    @Response<AccessDeniedErrorMessageResponse>(403, "Access denied")
-    public async getCaregiverDetails(
+    public async resendInvitation(
+        @Request() req: any,
         @Path() id: string
     ): Promise<any> {
         try {
-            this.setStatus(200);
-            return await CaregiverService.getCaregiverDetails(String(id));
-        } catch (error: any) {
-            this.setStatus(400);
-            return { message: error?.message || "Failed to retrieve caregivers" };
-        }
-    }
-
-    /** Add a new caregiver */
-    @Post("/")
-    @Security("jwt")
-    // @Middlewares(requirePermission(PERMISSIONS.CAREGIVER_CREATE))
-    @SuccessResponse(201, "Caregiver added successfully")
-    @Response<AuthenticationRequiredResponse>(401, "Authentication required")
-    @Response<AccessDeniedErrorMessageResponse>(403, "Access denied")
-    @Response<FieldValidationError>(422, "Validation Failed")
-    public async addCaregiver(
-        @Request() req: any,
-        @Body() body: CreateCaregiverRequest
-    ): Promise<any> {
-        try {
             const userId = req.user?._id;
-
             if (!userId) {
                 this.setStatus(401);
                 return { message: "Authentication required" };
             }
-
-            const fields = validateManageCaregiver(body);
-
-            if (Object.keys(fields).length > 0) {
-                this.setStatus(422);
-                return { fields };
-            }
-
-            const result = await CaregiverService.addCaregiver(String(userId), body);
-
-            this.setStatus(201);
-
-            return result;
+            this.setStatus(200);
+            return await CaregiverInvitationService.resendInvitation(String(userId), id);
         } catch (error: any) {
             this.setStatus(400);
-            return { message: error?.message || "Failed to add caregiver" };
+            return { message: error?.message || "Invalid request" };
         }
     }
 
-    /** Update an existing caregiver */
-    @Put("/{caregiverId}")
+    /** Delete invitation */
+    @Delete("{id}")
     @Security("jwt")
-    // @Middlewares(requirePermission(PERMISSIONS.CAREGIVER_UPDATE))
-    @SuccessResponse(200, "Caregiver updated successfully")
+    @SuccessResponse(200, "Invitation deleted successfully")
     @Response<AuthenticationRequiredResponse>(401, "Authentication required")
-    @Response<AccessDeniedErrorMessageResponse>(403, "Access denied")
-    @Response<FieldValidationError>(422, "Validation Failed")
-    public async updateCaregiver(
+    public async deleteInvitation(
         @Request() req: any,
-        @Path() caregiverId: string,
-        @Body() body: UpdateCaregiverRequest
+        @Path() id: string
     ): Promise<any> {
         try {
             const userId = req.user?._id;
-
             if (!userId) {
                 this.setStatus(401);
                 return { message: "Authentication required" };
             }
-
-            const fields = validateUpdateCaregiver(body);
-            if (Object.keys(fields).length > 0) {
-                this.setStatus(422);
-                return { fields };
-            }
-
-            const result = await CaregiverService.updateCaregiver(String(userId), caregiverId, body);
             this.setStatus(200);
-            return result;
+            return await CaregiverInvitationService.deleteInvitation(String(userId), id);
         } catch (error: any) {
             this.setStatus(400);
-            return { message: error?.message || "Failed to update caregiver" };
-        }
-    }
-
-    /** Remove a caregiver */
-    @Delete("/{caregiverId}")
-    @Security("jwt")
-    // @Middlewares(requirePermission(PERMISSIONS.CAREGIVER_DELETE))
-    @SuccessResponse(200, "Caregiver removed successfully")
-    @Response<AuthenticationRequiredResponse>(401, "Authentication required")
-    @Response<AccessDeniedErrorMessageResponse>(403, "Access denied")
-    public async removeCaregiver(
-        @Request() req: any,
-        @Path() caregiverId: string
-    ): Promise<any> {
-        try {
-            const userId = req.user?._id;
-
-            if (!userId) {
-                this.setStatus(401);
-                return { message: "Authentication required" };
-            }
-
-            this.setStatus(200);
-
-            return await CaregiverService.removeCaregiver(String(userId), caregiverId);
-        } catch (error: any) {
-            this.setStatus(400);
-            return { message: error?.message || "Failed to remove caregiver" };
+            return { message: error?.message || "Invalid request" };
         }
     }
 }
