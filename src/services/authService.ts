@@ -8,8 +8,7 @@ import { TokenBlacklist } from "../models/TokenBlacklist";
 import OTPGenerator from "otp-generator";
 import OTP from "../models/OTP";
 import { EditProfileInput } from "../types/schema/Auth";
-import CaregiverInvitationModel from "../models/CaregiverInvitation";
-import CaregiverModel from "../models/Caregiver";
+import * as CaregiverInvitationService from "./caregiverInvitationService";
 import RoutineModel from "../models/Routine";
 
 const myCommonQueue = new Queue("Medinest-CommonTask");
@@ -176,117 +175,103 @@ export const editUserProfile = async (_id: string, data: EditProfileInput) => {
 
     console.log("Editing user profile with data:", data);
 
-    if (data.phone) {
+    // 🔐 Fetch existing user
+    const existingUser = await User.findById(_id);
+    
+    if (!existingUser) throw new Error("User not found");
+
+    // ✅ Only update verified if phone actually changed
+    if (data.phone && data.phone !== existingUser.phone) {
       updateData.verified = true;
     }
 
     // ----------------------------------
-    // ✅ Caregiver Invitation Flow
+    // 🧠 ROUTINE SYNC (Optimized)
     // ----------------------------------
-    if (data.caregivers && data.caregivers.length > 0) {
-      for (const caregiver of data.caregivers) {
-        const phone = caregiver.phone?.trim();
-
-        if (!phone) continue;
-
-        // 🔍 Check if user exists
-        const existingUser = await User.findOne({ phone }).select("_id");
-
-        // ----------------------------------
-        // 1. Create Invitation
-        // ----------------------------------
-        await CaregiverInvitationModel.create({
-          senderUserId: _id,
-          receiverPhone: phone,
-          receiverUserId: existingUser?._id || null,
-          status: "pending",
-        });
-
-        // ----------------------------------
-        // 2. Create Relation (Pending)
-        // ----------------------------------
-        await CaregiverModel.create({
-          user: _id,
-          caregiver: existingUser?._id || null,
-          caregiverName: caregiver.name,
-          caregiverPhone: phone,
-          relation: caregiver.relation,
-          status: existingUser ? "pending_invite" : "unregistered",
-          invitedAt: new Date(),
-        });
-
-        // 👉 Optional: Trigger notification
-      }
-    }
 
     const userRoutines = await RoutineModel.find({ user: _id }).select("_id");
 
     const existingIds = userRoutines.map((r) => r._id.toString());
+
     const incomingIds = (data.routines || [])
       .filter((r: any) => r._id)
       .map((r: any) => r._id.toString());
 
-    // 🔥 Find deleted routines
     const deletedRoutineIds = existingIds.filter(
       (id) => !incomingIds.includes(id)
     );
 
-    // 🔥 Prepare bulk operations
-    const operations = [];
+    const operations: any[] = [];
 
     if (data.routines) {
       for (const routine of data.routines) {
-        if (routine._id) {
-          // UPDATE
+        const { _id: routineId, ...rest } = routine;
+
+        if (routineId) {
           operations.push({
             updateOne: {
-              filter: { _id: routine._id, user: _id },
-              update: { $set: routine },
+              filter: { _id: routineId, user: _id },
+              update: { $set: rest }, // ✅ avoid updating _id
             },
           });
         } else {
-          // CREATE
           operations.push({
             insertOne: {
-              document: { ...routine, user: _id },
+              document: { ...rest, user: _id },
             },
           });
         }
       }
     }
 
-    // 🔥 Execute all updates in ONE query
     if (operations.length > 0) {
       await RoutineModel.bulkWrite(operations);
     }
 
-    // 🔥 Delete removed routines
     if (deletedRoutineIds.length > 0) {
-      await RoutineModel.deleteMany({
-        _id: { $in: deletedRoutineIds },
-      });
+      await RoutineModel.deleteMany({ _id: { $in: deletedRoutineIds } });
     }
 
-    // 🔥 Handle null case
     if (data.routines === null) {
       await RoutineModel.deleteMany({ user: _id });
     }
 
     // ----------------------------------
-    // 3. Sync Caregiver Data if Phone Updated
+    // 👤 UPDATE USER
     // ----------------------------------
-    // TODO: Optimize to only sync if phone number is changed and verified
 
-    const user = await User.findByIdAndUpdate(_id, { $set: updateData }, { new: true }).select("-password -__v").populate([
-      {
-        path: "roles",
-        select: "name",
-      },
-    ]);
+    const user = await User.findByIdAndUpdate(
+      _id,
+      { $set: updateData },
+      { new: true }
+    )
+      .select("-password -__v")
+      .populate([{ path: "roles", select: "name" }]);
 
     if (!user) {
       throw new Error("User not found");
     }
+
+    // ----------------------------------
+    // 👥 CAREGIVER INVITATIONS (SAFE)
+    // ----------------------------------
+
+    if (data.caregivers && data.caregivers.length > 0) {
+      for (const caregiver of data.caregivers) {
+        await CaregiverInvitationService.createInvitation(String(_id), {
+          caregiverPhone: String(caregiver.phone),
+          caregiverName: String(caregiver.name),
+          relation: caregiver.relation || "Caregiver",
+          message: `${user?.name || "A user"} invited you as their caregiver`,
+        }).catch((err) => {
+          console.error(`Failed to create caregiver invitation for phone ${caregiver.phone}:`, err);
+        });
+      }
+    }
+
+    // ----------------------------------
+    // 🔐 TOKEN GENERATION
+    // ----------------------------------
 
     const payload = {
       _id: user._id,

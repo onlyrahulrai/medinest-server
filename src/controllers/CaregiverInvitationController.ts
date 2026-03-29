@@ -66,7 +66,7 @@ export class CaregiverInvitationController extends Controller {
     @Response<ErrorMessageResponse>(401, "Authentication required")
     public async getInvitations(
         @Request() req: any,
-        @Query() type?: "incoming" | "sent",
+        @Query() type: "incoming" | "sent",
         @Query() status?: string
     ): Promise<any> {
         try {
@@ -141,7 +141,7 @@ export class CaregiverInvitationController extends Controller {
             }
 
             this.setStatus(200);
-            
+
             return await CaregiverInvitationService.respondToInvitation(String(userId), id, body.action);
         } catch (error: any) {
             this.setStatus(400);

@@ -8,7 +8,6 @@ import {
   Tags,
   Body,
   SuccessResponse,
-  Response,
   Request,
   Security,
   Path,
@@ -16,7 +15,6 @@ import {
 import * as RoutineService from "../services/routineService";
 import { AddRoutineInput, RoutineResponse } from "../types/schema/Medicine";
 import { ErrorMessageResponse, SuccessMessageResponse } from "../types/schema/Common";
-import User from "../models/User";
 
 @Route("routines")
 @Tags("Routines")
@@ -51,11 +49,41 @@ export class RoutineController extends Controller {
   ): Promise<RoutineResponse | ErrorMessageResponse> {
     try {
       const userId = req.user?._id;
+
       if (!userId) {
         this.setStatus(401);
         throw new Error("Unauthorized");
       }
       return await RoutineService.createRoutine(String(userId), body) as any;
+    } catch (error: any) {
+      this.setStatus(500);
+      return { message: error.message };
+    }
+  }
+
+  /**
+   * Update a routine.
+   */
+  @Get("{id}")
+  public async getRoutineById(
+    @Request() req: any,
+    @Path() id: string
+  ): Promise<RoutineResponse | ErrorMessageResponse> {
+    try {
+      const userId = req.user?._id;
+      
+      if (!userId) {
+        this.setStatus(401);
+        throw new Error("Unauthorized");
+      }
+      const routine = await RoutineService.getRoutineById(id, String(userId));
+
+      if (!routine) {
+        this.setStatus(404);
+        return { message: "Routine not found" };
+      }
+
+      return routine as any;
     } catch (error: any) {
       this.setStatus(500);
       return { message: error.message };
@@ -109,30 +137,6 @@ export class RoutineController extends Controller {
         return { message: "Routine not found" };
       }
       return { message: "Routine deleted successfully" };
-    } catch (error: any) {
-      this.setStatus(500);
-      return { message: error.message };
-    }
-  }
-
-  /**
-   * Setup initial routines during onboarding.
-   */
-  @Post("setup")
-  @SuccessResponse(201, "Created")
-  public async setupOnboardingRoutines(
-    @Request() req: any,
-    @Body() body: { routines: AddRoutineInput[] }
-  ): Promise<RoutineResponse[] | ErrorMessageResponse> {
-    try {
-      const userId = req.user?._id;
-      if (!userId) {
-        this.setStatus(401);
-        throw new Error("Unauthorized");
-      }
-      const routines = await RoutineService.bulkCreateRoutines(String(userId), body.routines);
-      await User.findByIdAndUpdate(userId, { routinesEnabled: true });
-      return routines as any;
     } catch (error: any) {
       this.setStatus(500);
       return { message: error.message };

@@ -9,7 +9,12 @@ import mongoose from "mongoose";
 
 export const getInvitationsForUser = async (userId: string, type?: "incoming" | "sent", status?: string) => {
     try {
-        const query: Record<string, any> = {};
+        const query: Record<string, any> = {
+            $or: [
+                { senderUserId: userId },
+                { receiverUserId: userId }
+            ]
+        };
 
         if (type === "incoming") {
             query.receiverUserId = userId;
