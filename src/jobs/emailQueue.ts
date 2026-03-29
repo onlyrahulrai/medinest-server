@@ -7,4 +7,4 @@ const connection = {
   },
 };
 
-export const emailQueue = new Queue('SS-EmailTask', connection);
+export const emailQueue = new Queue('Medinest-EmailTask', connection);

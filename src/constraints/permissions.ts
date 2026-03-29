@@ -4,6 +4,11 @@ export const PERMISSIONS = {
     BLOG_UPDATE: "blog:update",
     BLOG_DELETE: "blog:delete",
 
+    CAREGIVER_INVITATION_CREATE: "caregiver_invitation:create",
+    CAREGIVER_INVITATION_VIEW: "caregiver_invitation:view",
+    CAREGIVER_INVITATION_UPDATE: "caregiver_invitation:update",
+    CAREGIVER_INVITATION_DELETE: "caregiver_invitation:delete",
+
     PERMISSION_CREATE: "permission:create",
     PERMISSION_READ: "permission:read",
     PERMISSION_UPDATE: "permission:update",

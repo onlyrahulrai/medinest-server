@@ -1,5 +1,8 @@
 import jwt from "jsonwebtoken";
 import path from "path";
+import CaregiverInvitationModel from "../../models/CaregiverInvitation";
+import CaregiverModel from "../../models/Caregiver";
+import User from "../../models/User";
 
 /**
  * Generates a JWT token with the provided payload.
@@ -41,4 +44,46 @@ export const formatFile = (file: Express.Multer.File, baseUrl: string) => {
     relativePath: relativePath.replace(/^uploads\//, ""),
     url: `${baseUrl}/api/${relativePath}`,
   };
+};
+
+export const normalizePhone = (phone?: string) => phone?.replace(/\D/g, "") ?? "";
+
+export const syncCaregiverData = async (data: { phone: string, userId: string }) => {
+  const { phone, userId } = data;
+
+  if (!phone) return;
+
+  const user = await User.findById(userId);
+
+  if (!user) return;
+
+  // Invitations
+  await CaregiverInvitationModel.updateMany(
+    {
+      receiverPhone: phone,
+      receiver: null,
+      status: "pending",
+    },
+    {
+      $set: {
+        receiver: user._id,
+        status: "pending",
+      },
+    }
+  );
+
+  // Relations
+  await CaregiverModel.updateMany(
+    {
+      caregiverPhone: phone,
+      caregiver: null,
+      status: "unregistered",
+    },
+    {
+      $set: {
+        caregiver: user._id,
+        status: "pending_invite",
+      },
+    }
+  );
 };

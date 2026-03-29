@@ -134,3 +134,29 @@ export const deleteUser = async (
   }
 };
 
+export const checkUserExistsByPhone = async (
+  phone: string
+): Promise<{ found: boolean; name?: string; userId?: string }> => {
+  try {
+    const normalizedPhone = phone.replace(/\D/g, "");
+    if (!normalizedPhone) {
+      return { found: false };
+    }
+
+    const user = await User.findOne({ phone: normalizedPhone })
+      .select("_id name")
+      .lean();
+
+    if (!user) {
+      return { found: false };
+    }
+
+    return {
+      found: true,
+      name: user.name,
+      userId: String(user._id),
+    };
+  } catch (error: any) {
+    throw new Error(error.message || "Failed to check user existence");
+  }
+};

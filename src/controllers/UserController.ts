@@ -37,6 +37,29 @@ import { validateManageUser } from "../helper/validators/user";
 @Tags("User")
 export class UserController extends Controller {
 
+  /** Check if a user exists by phone number */
+  @Security("jwt")
+  @Get("check-exists")
+  @SuccessResponse(200, "Lookup result")
+  @Response<AuthenticationRequiredResponse>(401, "Authentication required")
+  @Response<ErrorMessageResponse>(400, "Invalid request")
+  public async checkUserExists(
+    @Query() phone: string
+  ): Promise<{ found: boolean; name?: string; userId?: string }> {
+    try {
+      if (!phone) {
+        this.setStatus(400);
+        return { found: false };
+      }
+      const result = await UserService.checkUserExistsByPhone(phone);
+      this.setStatus(200);
+      return result;
+    } catch (error: any) {
+      this.setStatus(400);
+      return { found: false };
+    }
+  }
+
   /** Get all users with pagination */
   @Security("jwt")
   @Get("/")

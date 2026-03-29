@@ -57,10 +57,11 @@ export interface EditProfileInput {
   name?: string;
   phone?: string;
   email?: string;
-  onboarding: {
+  onboarding?: {
     completed?: boolean;
     step?: number;
-  },
+  };
+  routines?: any;
   profile?: Partial<IProfile>;
   languages?: string[];
   preferences?: OnboardingPreferencesInput;
