@@ -6,7 +6,7 @@ export const validateManageCaregiver = (data: CreateCaregiverRequest) => {
   if (!data?.caregiverName?.trim()) {
     errors.caregiverName = "Caregiver name is required.";
   }
-  
+
   if (!data?.caregiverPhone?.trim()) {
     errors.caregiverPhone = "Caregiver phone is required.";
   } else if (!/^[6-9]\d{9}$/.test(data.caregiverPhone.trim())) {
@@ -26,11 +26,11 @@ export const validateUpdateCaregiver = (data: UpdateCaregiverRequest) => {
   if (data?.caregiverName !== undefined && !data.caregiverName.trim()) {
     errors.caregiverName = "Caregiver name cannot be empty.";
   }
-  
+
   if (data?.relation !== undefined && !data.relation.trim()) {
     errors.relation = "Relation cannot be empty.";
   }
-  
+
   if ((data as any).caregiverPhone !== undefined) {
     errors.caregiverPhone = "Caregiver phone is immutable and cannot be updated.";
   }

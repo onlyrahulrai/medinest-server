@@ -48,13 +48,6 @@ const caregiverRelationSchema = new mongoose.Schema<ICaregiverRelation>(
             default: "unregistered",
         },
 
-        permissions: {
-            canViewMedicines: { type: Boolean, default: true },
-            canEditMedicines: { type: Boolean, default: false },
-            canReceiveAlerts: { type: Boolean, default: true },
-            canViewHealthData: { type: Boolean, default: false },
-        },
-
         invitedAt: Date,
         respondedAt: Date,
     },

@@ -18,12 +18,10 @@ import {
 import * as CaregiverService from "../services/caregiverService";
 import { AuthenticationRequiredResponse } from "../types/schema/Auth";
 import { AccessDeniedErrorMessageResponse, ErrorMessageResponse, FieldValidationError } from "../types/schema/Common";
-import { PERMISSIONS } from "../constraints/permissions";
-import { requirePermission } from "../middleware/requirePermission";
 import { CreateCaregiverRequest, UpdateCaregiverRequest, RespondInvitationRequest } from "../types/schema/Caregiver";
 import { validateManageCaregiver, validateUpdateCaregiver } from "../helper/validators/caregiver";
 
-@Route("caregiver")
+@Route("caregivers")
 @Tags("Caregiver Management")
 export class CaregiverController extends Controller {
 
@@ -59,23 +57,50 @@ export class CaregiverController extends Controller {
   @Response<ErrorMessageResponse>(401, "Authentication required")
   public async getInvitations(
     @Request() req: any,
-    @Query() phone?: string
+    @Query() type?: string,
   ): Promise<any> {
     try {
-      // const userPhone = phone || req.user?.phone;
+      const userId = req.user?._id;
 
-      console.log("Fetching invitations for phone:", phone);
-
-      if (!phone) {
-        this.setStatus(400);
-        return { message: "Phone number is required" };
+      if (!userId) {
+        this.setStatus(401);
+        return { message: "Authentication required" };
       }
 
       this.setStatus(200);
-      return await CaregiverService.getInvitationsForUserByPhone(phone);
+
+      return await CaregiverService.getInvitationsForUser(String(userId), type);
     } catch (error: any) {
       console.error("Error fetching invitations:", error);
 
+      this.setStatus(400);
+      return { message: error?.message || "Invalid request" };
+    }
+  }
+
+  /** Respond to an invitation */
+  @Post("/invitations/{invitationId}/respond")
+  @Security("jwt")
+  @SuccessResponse(200, "Invitation responded successfully")
+  @Response<AuthenticationRequiredResponse>(401, "Authentication required")
+  public async respondToInvitation(
+    @Request() req: any,
+    @Path() invitationId: string,
+    @Body() body: RespondInvitationRequest
+  ): Promise<any> {
+    try {
+      const userId = req.user?._id;
+      if (!userId) {
+        this.setStatus(401);
+        return { message: "Authentication required" };
+      }
+      if (!body.status || !["accepted", "rejected"].includes(body.status)) {
+        this.setStatus(400);
+        return { message: "Invalid status" };
+      }
+      this.setStatus(200);
+      return await CaregiverService.respondToCaregiverInvitationById(String(userId), invitationId, body.status);
+    } catch (error: any) {
       this.setStatus(400);
       return { message: error?.message || "Invalid request" };
     }
@@ -199,34 +224,6 @@ export class CaregiverController extends Controller {
     } catch (error: any) {
       this.setStatus(400);
       return { message: error?.message || "Failed to remove caregiver" };
-    }
-  }
-
-  /** Respond to an invitation */
-  @Post("/invitations/{invitationId}/respond")
-  @Security("jwt")
-  @SuccessResponse(200, "Invitation responded successfully")
-  @Response<AuthenticationRequiredResponse>(401, "Authentication required")
-  public async respondToInvitation(
-    @Request() req: any,
-    @Path() invitationId: string,
-    @Body() body: RespondInvitationRequest
-  ): Promise<any> {
-    try {
-      const userId = req.user?._id;
-      if (!userId) {
-        this.setStatus(401);
-        return { message: "Authentication required" };
-      }
-      if (!body.status || !["accepted", "rejected"].includes(body.status)) {
-        this.setStatus(400);
-        return { message: "Invalid status" };
-      }
-      this.setStatus(200);
-      return await CaregiverService.respondToCaregiverInvitationById(String(userId), invitationId, body.status);
-    } catch (error: any) {
-      this.setStatus(400);
-      return { message: error?.message || "Invalid request" };
     }
   }
 }

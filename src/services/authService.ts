@@ -12,7 +12,7 @@ import CaregiverInvitationModel from "../models/CaregiverInvitation";
 import CaregiverModel from "../models/Caregiver";
 import RoutineModel from "../models/Routine";
 
-const myCommonQueue = new Queue("medinest-CommonTask");
+const myCommonQueue = new Queue("Medinest-CommonTask");
 
 /**
  * Send OTP to a phone number for login.

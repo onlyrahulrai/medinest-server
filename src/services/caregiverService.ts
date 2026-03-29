@@ -7,18 +7,24 @@ import { CreateCaregiverRequest, UpdateCaregiverRequest } from "../types/schema/
 import { normalizePhone } from "../helper/utils/common";
 import mongoose from "mongoose";
 
-export const getInvitationsForUserByPhone = async (phone: string) => {
+export const getInvitationsForUser = async (userId: string, type?: string) => {
   try {
-    const normalizedPhone = normalizePhone(phone);
+    const query: Record<string, any> = {};
 
-    if (!normalizedPhone) return [];
+    switch (type) {
+      case "sent":
+        query.senderUserId = userId;
+        break;
+      case "received":
+        query.receiverUserId = userId;
+        break;
+      default:
+        break;
+    }
 
-    const invitations = await CaregiverInvitationModel.find({
-      receiverPhone: normalizedPhone,
-      status: "pending",
-    }).select("_id senderUserId receiverPhone status message createdAt")
+    const invitations = await CaregiverInvitationModel.find(query).select("_id senderUserId receiverUserId receiverPhone status message createdAt")
       .populate({
-        path: "senderUserId",
+        path: "senderUserId receiverUserId",
         select: "name phone",
       })
       .lean();
@@ -148,7 +154,7 @@ export const getCaregiverDetails = async (caregiverId: string) => {
 
 export const addCaregiver = async (userId: string, payload: CreateCaregiverRequest) => {
   try {
-    const { caregiverName, caregiverPhone, relation, permissions } = payload;
+    const { caregiverName, caregiverPhone, relation } = payload;
 
     const normalizedPhone = normalizePhone(caregiverPhone);
 
@@ -185,12 +191,6 @@ export const addCaregiver = async (userId: string, payload: CreateCaregiverReque
       caregiverPhone: normalizedPhone,
       relation,
       status,
-      permissions: permissions || {
-        canViewMedicines: true,
-        canEditMedicines: false,
-        canReceiveAlerts: true,
-        canViewHealthData: false,
-      },
       invitedAt: new Date(),
     });
 
@@ -265,7 +265,6 @@ export const removeCaregiver = async (
       _id: relationId,
       $or: [
         { user: userId },
-        { caregiver: userId }
       ]
     });
 
@@ -274,7 +273,9 @@ export const removeCaregiver = async (
     }
 
     relation.status = "removed";
+
     relation.respondedAt = new Date();
+
     await relation.save();
 
     if (relation.user.toString() === userId) {
