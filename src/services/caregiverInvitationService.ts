@@ -11,24 +11,24 @@ export const getInvitationsForUser = async (userId: string, type?: "incoming" | 
     try {
         const query: Record<string, any> = {
             $or: [
-                { senderUserId: userId },
-                { receiverUserId: userId }
+                { sender: userId },
+                { receiver: userId }
             ]
         };
 
         if (type === "incoming") {
-            query.receiverUserId = userId;
+            query.receiver = userId;
         } else if (type === "sent") {
-            query.senderUserId = userId;
+            query.sender = userId;
         }
 
         if (status) {
             query.status = status;
         }
 
-        const invitations = await CaregiverInvitationModel.find(query).select("_id senderUserId receiverUserId receiverPhone caregiverName relation status message createdAt expiresAt respondedAt")
+        const invitations = await CaregiverInvitationModel.find(query).select("_id sender receiver receiverPhone caregiverName relation status message createdAt expiresAt respondedAt")
             .populate({
-                path: "senderUserId receiverUserId",
+                path: "sender receiver",
                 select: "name phone",
             })
             .lean();
@@ -37,13 +37,13 @@ export const getInvitationsForUser = async (userId: string, type?: "incoming" | 
         return invitations.map(invitation => ({
             ...invitation,
             _id: invitation._id.toString(),
-            senderUserId: invitation.senderUserId ? {
-                ...invitation.senderUserId,
-                _id: invitation.senderUserId._id.toString()
+            sender: invitation.sender ? {
+                ...invitation.sender,
+                _id: invitation.sender._id.toString()
             } : null,
-            receiverUserId: invitation.receiverUserId ? {
-                ...invitation.receiverUserId,
-                _id: invitation.receiverUserId._id.toString()
+            receiver: invitation.receiver ? {
+                ...invitation.receiver,
+                _id: invitation.receiver._id.toString()
             } : null,
             createdAt: invitation.createdAt.toISOString(),
             expiresAt: invitation.expiresAt ? invitation.expiresAt.toISOString() : null,
@@ -59,11 +59,11 @@ export const getInvitationById = async (userId: string, invitationId: string) =>
         const invitation = await CaregiverInvitationModel.findOne({
             _id: invitationId,
             $or: [
-                { senderUserId: userId },
-                { receiverUserId: userId }
+                { sender: userId },
+                { receiver: userId }
             ]
         }).populate({
-            path: "senderUserId receiverUserId",
+            path: "sender receiver",
             select: "name phone",
         }).lean();
 
@@ -75,13 +75,13 @@ export const getInvitationById = async (userId: string, invitationId: string) =>
         return {
             ...invitation,
             _id: invitation._id.toString(),
-            senderUserId: invitation.senderUserId ? {
-                ...invitation.senderUserId,
-                _id: invitation.senderUserId._id.toString()
+            sender: invitation.sender ? {
+                ...invitation.sender,
+                _id: invitation.sender._id.toString()
             } : null,
-            receiverUserId: invitation.receiverUserId ? {
-                ...invitation.receiverUserId,
-                _id: invitation.receiverUserId._id.toString()
+            receiver: invitation.receiver ? {
+                ...invitation.receiver,
+                _id: invitation.receiver._id.toString()
             } : null,
             createdAt: invitation.createdAt.toISOString(),
             expiresAt: invitation.expiresAt ? invitation.expiresAt.toISOString() : null,
@@ -110,8 +110,8 @@ export const respondToInvitation = async (
 
         // 🔐 Authorization check
         if (
-            invitation.receiverUserId &&
-            invitation.receiverUserId.toString() !== caregiverUserId
+            invitation.receiver &&
+            invitation.receiver.toString() !== caregiverUserId
         ) {
             throw new Error("Unauthorized action");
         }
@@ -130,7 +130,7 @@ export const respondToInvitation = async (
         const status = action === "accept" ? "accepted" : "rejected";
 
         invitation.status = status;
-        invitation.receiverUserId = new mongoose.Types.ObjectId(caregiverUserId);
+        invitation.receiver = new mongoose.Types.ObjectId(caregiverUserId);
         invitation.respondedAt = new Date();
 
         await invitation.save();
@@ -141,12 +141,12 @@ export const respondToInvitation = async (
         if (action === "accept") {
             await CaregiverRelationModel.updateOne(
                 {
-                    user: invitation.senderUserId,
+                    user: invitation.sender,
                     caregiver: caregiverUserId,
                 },
                 {
                     $setOnInsert: {
-                        user: invitation.senderUserId,
+                        user: invitation.sender,
                         caregiver: caregiverUserId,
                         caregiverPhone: invitation.receiverPhone,
                         caregiverName:
@@ -161,7 +161,7 @@ export const respondToInvitation = async (
             await CaregiverInvitationModel.updateMany(
                 {
                     _id: { $ne: invitation._id },
-                    senderUserId: invitation.senderUserId,
+                    sender: invitation.sender,
                     receiverPhone: invitation.receiverPhone,
                     status: "pending",
                 },
@@ -175,7 +175,7 @@ export const respondToInvitation = async (
 
             // Fetch created relation
             relation = await CaregiverRelationModel.findOne({
-                user: invitation.senderUserId,
+                user: invitation.sender,
                 caregiver: caregiverUserId,
             });
         }
@@ -186,7 +186,7 @@ export const respondToInvitation = async (
             .lean();
 
         emitToUser(
-            String(invitation.senderUserId),
+            String(invitation.sender),
             "caregiver-invitation-response",
             {
                 caregiverUserId,
@@ -199,9 +199,9 @@ export const respondToInvitation = async (
             invitation: {
                 ...invitation.toObject(),
                 _id: invitation._id.toString(),
-                senderUserId: invitation.senderUserId.toString(),
-                receiverUserId: invitation.receiverUserId
-                    ? invitation.receiverUserId.toString()
+                sender: invitation.sender.toString(),
+                receiver: invitation.receiver
+                    ? invitation.receiver.toString()
                     : null,
                 createdAt: invitation.createdAt.toISOString(),
                 expiresAt: invitation.expiresAt
@@ -233,7 +233,7 @@ export const resendInvitation = async (userId: string, invitationId: string) => 
     try {
         const invitation = await CaregiverInvitationModel.findOne({
             _id: invitationId,
-            senderUserId: userId,
+            sender: userId,
             status: { $in: ["pending", "expired"] }
         });
 
@@ -247,16 +247,16 @@ export const resendInvitation = async (userId: string, invitationId: string) => 
         await invitation.save();
 
         // Send notification if receiver exists
-        if (invitation.receiverUserId) {
+        if (invitation.receiver) {
             await NotificationService.send({
-                userId: invitation.receiverUserId,
+                userId: invitation.receiver,
                 title: "Caregiver Invitation",
                 message: "You have been invited as a caregiver",
                 type: "system",
                 relatedType: "invitation",
             });
 
-            emitToUser(String(invitation.receiverUserId), "new-caregiver-invitation", {
+            emitToUser(String(invitation.receiver), "new-caregiver-invitation", {
                 senderId: userId,
                 senderName: "User", // Can populate
             });
@@ -272,7 +272,7 @@ export const deleteInvitation = async (userId: string, invitationId: string) => 
     try {
         const invitation = await CaregiverInvitationModel.findOne({
             _id: invitationId,
-            senderUserId: userId,
+            sender: userId,
             status: "pending"
         });
 
@@ -300,7 +300,7 @@ export const createInvitation = async (userId: string, payload: CreateInvitation
 
         // Check for existing pending invitation
         const existingInvitation = await CaregiverInvitationModel.findOne({
-            senderUserId: userId,
+            sender: userId,
             receiverPhone: normalizedPhone,
             status: "pending"
         });
@@ -318,9 +318,9 @@ export const createInvitation = async (userId: string, payload: CreateInvitation
         }
 
         const invitation = new CaregiverInvitationModel({
-            senderUserId: userId,
+            sender: userId,
             receiverPhone: normalizedPhone,
-            receiverUserId: existingUser ? existingUser._id : null,
+            receiver: existingUser ? existingUser._id : null,
             caregiverName,
             relation,
             status: "pending",
@@ -350,8 +350,8 @@ export const createInvitation = async (userId: string, payload: CreateInvitation
             data: {
                 ...invitation.toObject(),
                 _id: invitation._id.toString(),
-                senderUserId: invitation.senderUserId.toString(),
-                receiverUserId: invitation.receiverUserId ? invitation.receiverUserId.toString() : null,
+                sender: invitation.sender.toString(),
+                receiver: invitation.receiver ? invitation.receiver.toString() : null,
                 createdAt: invitation.createdAt.toISOString(),
                 expiresAt: invitation.expiresAt ? invitation.expiresAt.toISOString() : null,
                 respondedAt: invitation.respondedAt ? invitation.respondedAt.toISOString() : null,

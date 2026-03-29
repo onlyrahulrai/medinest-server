@@ -61,12 +61,12 @@ export const syncCaregiverData = async (data: { phone: string, userId: string })
   await CaregiverInvitationModel.updateMany(
     {
       receiverPhone: phone,
-      receiverUserId: null,
+      receiver: null,
       status: "pending",
     },
     {
       $set: {
-        receiverUserId: user._id,
+        receiver: user._id,
         status: "pending",
       },
     }

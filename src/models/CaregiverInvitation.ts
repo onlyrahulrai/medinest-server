@@ -1,9 +1,9 @@
 import mongoose, { Schema, Document } from "mongoose";
 
 export interface ICaregiverInvitation extends Document {
-  senderUserId: mongoose.Types.ObjectId;
+  sender: mongoose.Types.ObjectId;
   receiverPhone: string;
-  receiverUserId?: mongoose.Types.ObjectId;
+  receiver?: mongoose.Types.ObjectId;
   caregiverName: string;
   relation: string;
   status: "pending" | "accepted" | "rejected" | "expired";
@@ -16,11 +16,11 @@ export interface ICaregiverInvitation extends Document {
 
 const CaregiverInvitationSchema: Schema = new Schema(
   {
-    senderUserId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    sender: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
 
     receiverPhone: { type: String, required: true },
 
-    receiverUserId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    receiver: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
 
     caregiverName: { type: String, required: true, trim: true },
 
@@ -47,12 +47,12 @@ const CaregiverInvitationSchema: Schema = new Schema(
 
 // Prevent duplicate active invites
 CaregiverInvitationSchema.index(
-  { senderUserId: 1, receiverPhone: 1, status: 1 },
+  { sender: 1, receiverPhone: 1, status: 1 },
   { unique: true, partialFilterExpression: { status: "pending" } }
 );
 
 // Receiver lookup
-CaregiverInvitationSchema.index({ receiverUserId: 1, status: 1 });
+CaregiverInvitationSchema.index({ receiver: 1, status: 1 });
 
 // Existing index
 CaregiverInvitationSchema.index({ receiverPhone: 1, status: 1 });
