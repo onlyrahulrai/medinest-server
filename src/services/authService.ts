@@ -188,53 +188,55 @@ export const editUserProfile = async (_id: string, data: EditProfileInput) => {
     // ----------------------------------
     // 🧠 ROUTINE SYNC (Optimized)
     // ----------------------------------
-
-    const userRoutines = await RoutineModel.find({ user: _id }).select("_id");
-
-    const existingIds = userRoutines.map((r) => r._id.toString());
-
-    const incomingIds = (data.routines || [])
-      .filter((r: any) => r._id)
-      .map((r: any) => r._id.toString());
-
-    const deletedRoutineIds = existingIds.filter(
-      (id) => !incomingIds.includes(id)
-    );
-
-    const operations: any[] = [];
-
-    if (data.routines) {
-      for (const routine of data.routines) {
-        const { _id: routineId, ...rest } = routine;
-
-        if (routineId) {
-          operations.push({
-            updateOne: {
-              filter: { _id: routineId, user: _id },
-              update: { $set: rest }, // ✅ avoid updating _id
-            },
-          });
-        } else {
-          operations.push({
-            insertOne: {
-              document: { ...rest, user: _id },
-            },
-          });
+    if(updateData?.onboarding?.step === 4) {
+      const userRoutines = await RoutineModel.find({ user: _id }).select("_id");
+  
+      const existingIds = userRoutines.map((r) => r._id.toString());
+  
+      const incomingIds = (data.routines || [])
+        .filter((r: any) => r._id)
+        .map((r: any) => r._id.toString());
+  
+      const deletedRoutineIds = existingIds.filter(
+        (id) => !incomingIds.includes(id)
+      );
+  
+      const operations: any[] = [];
+  
+      if (data.routines) {
+        for (const routine of data.routines) {
+          const { _id: routineId, ...rest } = routine;
+  
+          if (routineId) {
+            operations.push({
+              updateOne: {
+                filter: { _id: routineId, user: _id },
+                update: { $set: rest }, // ✅ avoid updating _id
+              },
+            });
+          } else {
+            operations.push({
+              insertOne: {
+                document: { ...rest, user: _id },
+              },
+            });
+          }
         }
+      }
+  
+      if (operations.length > 0) {
+        await RoutineModel.bulkWrite(operations);
+      }
+  
+      if (deletedRoutineIds.length > 0) {
+        await RoutineModel.deleteMany({ _id: { $in: deletedRoutineIds } });
+      }
+  
+      if (data.routines === null) {
+        await RoutineModel.deleteMany({ user: _id });
       }
     }
 
-    if (operations.length > 0) {
-      await RoutineModel.bulkWrite(operations);
-    }
-
-    if (deletedRoutineIds.length > 0) {
-      await RoutineModel.deleteMany({ _id: { $in: deletedRoutineIds } });
-    }
-
-    if (data.routines === null) {
-      await RoutineModel.deleteMany({ user: _id });
-    }
 
     // ----------------------------------
     // 👤 UPDATE USER
