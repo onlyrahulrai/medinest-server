@@ -9,6 +9,7 @@ export interface IMedicineGroup extends Document {
     createdBy: mongoose.Schema.Types.ObjectId;
     status: "active" | "completed" | "archived";
     notes: string;
+    reminderEnabled: boolean;
     deletedAt: Date;
     isActive: boolean;
     createdAt: Date;
@@ -37,6 +38,8 @@ const MedicineGroupSchema = new mongoose.Schema({
     },
 
     notes: String,
+
+    reminderEnabled: { type: Boolean, default: true },
 
     deletedAt: Date,
 

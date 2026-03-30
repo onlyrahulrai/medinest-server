@@ -26,7 +26,7 @@ export const generateLogsForMedicine = async (medicineId: string, daysAhead: num
             second: 0,
             millisecond: 0
           }).toDate();
-          
+
           logs.push({
             userId: medicine.userId,
             medicineId: medicine._id,
@@ -44,7 +44,7 @@ export const generateLogsForMedicine = async (medicineId: string, daysAhead: num
               second: 0,
               millisecond: 0
             }).toDate();
-            
+
             logs.push({
               userId: medicine.userId,
               medicineId: medicine._id,
@@ -63,7 +63,7 @@ export const generateLogsForMedicine = async (medicineId: string, daysAhead: num
           second: 0,
           millisecond: 0
         }).toDate();
-        
+
         logs.push({
           userId: medicine.userId,
           medicineId: medicine._id,
@@ -84,7 +84,7 @@ export const generateLogsForMedicine = async (medicineId: string, daysAhead: num
       status: 'pending',
       scheduledTime: { $gte: moment(genStart).toDate() }
     });
-    
+
     await MedicineLog.insertMany(logs);
   }
 };
@@ -100,7 +100,7 @@ export const updateLogStatus = async (logId: string, userId: string, status: 'ta
 export const getTodaysLogs = async (userId: string, patientId?: string) => {
   const startOfDay = moment().startOf('day').toDate();
   const endOfDay = moment().endOf('day').toDate();
-  
+
   return await MedicineLog.find({
     userId: patientId || userId,
     scheduledTime: { $gte: startOfDay, $lte: endOfDay }

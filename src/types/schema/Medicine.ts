@@ -7,7 +7,7 @@ export interface MedicineDosage {
 export interface CustomSchedule {
   enabled: boolean;
   times: string[];
-  frequency: 'daily' | 'weekly' | 'custom' | 'as_needed';
+  frequency: 'Once daily' | 'Twice daily' | 'Thrice daily' | 'Four times daily' | 'As needed';
   daysOfWeek?: number[];
 }
 
