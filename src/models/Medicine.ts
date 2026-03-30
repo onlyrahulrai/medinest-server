@@ -15,7 +15,7 @@ export interface IMedicine extends Document {
   customSchedule: {
     enabled: boolean;
     times: string[];
-    frequency: 'daily' | 'weekly' | 'interval';
+    frequency: 'Once daily' | 'Twice daily' | 'Thrice daily' | 'Four times daily' | 'As needed';
     interval: number;
     daysOfWeek?: number[];
   };
@@ -37,6 +37,13 @@ export interface IMedicine extends Document {
     isOngoing: boolean;
   };
 
+  refill: {
+    totalQuantity: number,
+    remainingQuantity: number,
+    refillReminderEnabled: boolean,
+    refillAt: number,
+  },
+
   notes?: string;
 
   status: {
@@ -48,6 +55,7 @@ export interface IMedicine extends Document {
   meta: {
     color: String,
     photo: String,
+    type: String,
   },
 
   reminderEnabled?: boolean;
@@ -96,7 +104,7 @@ const MedicineSchema: Schema = new Schema(
 
       frequency: {
         type: String,
-        enum: ["daily", "weekly", "interval"],
+        enum: ["Once daily", "Twice daily", "Thrice daily", "Four times daily", "As needed"],
       },
 
       interval: Number, // every X days
@@ -124,7 +132,6 @@ const MedicineSchema: Schema = new Schema(
     refill: {
       totalQuantity: Number,
       remainingQuantity: Number,
-      unit: String, // tablets, ml
       refillReminderEnabled: { type: Boolean, default: false },
       refillAt: Number,
     },
@@ -145,6 +152,7 @@ const MedicineSchema: Schema = new Schema(
     meta: {
       color: String,
       photo: String,
+      type: String,
     },
 
     reminderEnabled: { type: Boolean, default: true },
