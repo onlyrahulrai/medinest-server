@@ -8,46 +8,68 @@ export interface CustomSchedule {
   enabled: boolean;
   times: string[];
   frequency: 'Once daily' | 'Twice daily' | 'Thrice daily' | 'Four times daily' | 'As needed';
-  daysOfWeek?: number[];
 }
 
 export interface MedicineDuration {
   startDate: string; // ISO string
-  endDate?: string; // ISO string
-}
-
-export interface MedicinePrescription {
-  prescribedBy?: string;
-  purpose?: string;
+  durationInDays?: string;
+  isOngoing?: boolean;
 }
 
 export interface MedicineRefill {
-  refillReminder: boolean;
-  totalQuantity: number;
-  remainingQuantity: number;
-  refillAt: number;
+  totalQuantity?: number;
+  remainingQuantity?: number;
+  refillReminderEnabled?: boolean;
+  refillAt?: string;
+}
+
+export interface MedicineMeta {
+  color?: string;
+  photo?: string;
+  type?: string;
 }
 
 export interface CreateMedicineInput {
   name: string;
-  type: string;
   dosage: MedicineDosage;
   routineIds?: string[];
   customSchedule: CustomSchedule;
+  mealTiming?: string;
   duration: MedicineDuration;
-  mealTiming?: string[];
-  prescription: MedicinePrescription;
-  notes?: string;
-  instructions?: string;
-  color?: string;
-  imageUrl?: string;
+  isDurationInherited?: boolean;
   refill: MedicineRefill;
+  purpose?: string
+  notes?: string;
+  meta?: MedicineMeta;
   reminderEnabled?: boolean;
-  scheduleGroupId?: string;
-  patientId?: string;
+}
+
+export interface CreateMedicineScheduleInput {
+  user?: string,
+  name?: string,
+  startDate?: string,
+  groupForHowLong?: string,
+  groupNotes?: string,
+  prescribedBy?: string,
+  reminderEnabled?: boolean,
+  medicines: CreateMedicineInput[];
 }
 
 export interface UpdateMedicineInput extends Partial<CreateMedicineInput> {
+  _id?: string;
+  isActive?: boolean;
+}
+
+export interface UpdateMedicineScheduleInput {
+  _id: string,
+  user?: string,
+  name?: string,
+  startDate?: string,
+  groupForHowLong?: string,
+  groupNotes?: string,
+  prescribedBy?: string,
+  reminderEnabled?: boolean,
+  medicines: UpdateMedicineInput[];
   isActive?: boolean;
 }
 
@@ -64,26 +86,45 @@ export interface MedicineLogResponse {
   updatedAt: string;
 }
 
-export interface MedicineResponse extends Omit<CreateMedicineInput, 'routineIds'> {
+export interface MedicineDetailsResponse {
   _id: string;
-  userId: string;
-  routineIds: any[]; // Populated routines
+  user: string;
+  name: string;
+  dosage: MedicineDosage;
+  customSchedule: CustomSchedule;
+  mealTiming?: string;
+  duration: MedicineDuration;
+  isDurationInherited?: boolean;
+  refill: MedicineRefill;
+  purpose?: string
+  notes?: string;
+  meta?: MedicineMeta;
+  reminderEnabled?: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface AddRoutineInput {
-  name: string;
-  time: string;
-}
-
-export interface RoutineResponse {
+export interface MedicineScheduleDetailsResponse {
   _id: string;
-  userId: string;
+  user: string;
   name: string;
-  time: string;
+  startDate: string;
+  groupForHowLong?: string;
+  groupNotes?: string;
+  prescribedBy?: string;
+  reminderEnabled?: boolean;
+  medicines: MedicineDetailsResponse[];
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface MedicineScheduleResponse {
+  page: number;
+  limit: number;
+  total: number;
+  has_next: boolean;
+  has_prev: boolean;
+  results: Partial<MedicineScheduleDetailsResponse>[];
 }

@@ -13,7 +13,7 @@ import {
   Path,
 } from "tsoa";
 import * as RoutineService from "../services/routineService";
-import { AddRoutineInput, RoutineResponse } from "../types/schema/Medicine";
+import { AddRoutineInput, RoutineResponse } from "../types/schema/Routine";
 import { ErrorMessageResponse, SuccessMessageResponse } from "../types/schema/Common";
 
 @Route("routines")
@@ -71,7 +71,7 @@ export class RoutineController extends Controller {
   ): Promise<RoutineResponse | ErrorMessageResponse> {
     try {
       const userId = req.user?._id;
-      
+
       if (!userId) {
         this.setStatus(401);
         throw new Error("Unauthorized");

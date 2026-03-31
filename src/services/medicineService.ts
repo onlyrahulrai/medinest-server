@@ -1,64 +1,86 @@
 import Medicine, { IMedicine } from "../models/Medicine";
-import { CreateMedicineInput, UpdateMedicineInput } from "../types/schema/Medicine";
-import mongoose from "mongoose";
+import { UpdateMedicineInput, CreateMedicineScheduleInput } from "../types/schema/Medicine";
+import mongoose, { Types } from "mongoose";
 import User from "../models/User";
 import { generateLogsForMedicine } from "./medicineLogService";
+import MedicineSchedule from "../models/MedicineGroup";
 
-export const createMedicine = async (userId: string, data: CreateMedicineInput): Promise<IMedicine> => {
+const calculateEndDate = (startDate?: Date | unknown, durationLabel?: string) => {
+  const date = new Date(startDate);
+
+  switch (durationLabel) {
+    case "Once daily":
+      date.setDate(date.getDate() + 1);
+      break;
+    case "Twice daily":
+      date.setDate(date.getDate() + 2);
+      break;
+    case "Three times daily":
+      date.setDate(date.getDate() + 3);
+      break;
+    case "Four times daily":
+      date.setDate(date.getDate() + 4);
+      break;
+    case "As needed":
+      date.setDate(date.getDate() + 1);
+      break;
+    default:
+      break;
+  }
+  return date;
+}
+
+export const createMedicine = async (user: string, data: CreateMedicineScheduleInput): Promise<IMedicine> => {
   try {
-    // Basic validation
-    if (!data.name || !data.type || !data.dosage) {
-      throw new Error("Medicine name, type, and dosage are required");
-    }
+    const { ownerId, name, startDate, prescribedBy, groupDurationLabel, reminderEnabled, groupNotes, medicines } = data;
 
-    if (data.routineIds && data.routineIds.length > 0 && data.customSchedule?.enabled) {
-      throw new Error("Cannot use both routine and custom schedule");
-    }
-
-    if ((!data.routineIds || data.routineIds.length === 0) && !data.customSchedule?.enabled) {
-      throw new Error("Schedule is required (select routines or define custom schedule)");
-    }
-
-    // Determine target user (self or patient)
-    let targetUserId = userId;
-    if (data.patientId && data.patientId !== userId) {
-      const user = await User.findById(userId);
-      if (!user?.managedPatients?.some(id => id.toString() === data.patientId)) {
-        throw new Error("You do not have permission to manage this patient");
-      }
-      targetUserId = data.patientId;
-    }
-
-    const startDate = new Date(data.duration.startDate);
-    const endDate = data.duration.endDate ? new Date(data.duration.endDate) : undefined;
-
-    if (endDate && startDate > endDate) {
-      throw new Error("Start date cannot be after end date");
-    }
-
-    const medicine = new Medicine({
-      userId: targetUserId,
-      ...data,
-      duration: {
-        startDate,
-        endDate
-      }
+    const medicineSchedule = new MedicineSchedule({
+      user: ownerId,
+      createdBy: user,
+      name,
+      type: medicines.length > 1 ? "multi" : "single",
+      startDate,
+      endDate: calculateEndDate(startDate, groupDurationLabel),
+      status: "active",
+      notes: groupNotes,
+      prescribedBy,
+      reminderEnabled,
     });
 
-    const savedMed = await medicine.save();
-    
-    // Generate initial logs for 1 month
-    await generateLogsForMedicine(String(savedMed._id), 30);
+    const savedMedicineSchedule = await medicineSchedule.save();
 
-    return savedMed;
+    for (const medicine of medicines) {
+      const medicineInstance = new Medicine({
+        user: ownerId,
+        createdBy: user,
+        group: savedMedicineSchedule._id,
+        name: medicine.name,
+        dosage: medicine.dosage,
+        routines: medicine.routineIds,
+        customSchedule: medicine.customSchedule,
+        mealTiming: medicine.mealTiming,
+        duration: medicine.duration,
+        isDurationInherited: medicine.isDurationInherited,
+        refill: medicine.refill,
+        purpose: medicine.purpose,
+        notes: medicine.notes,
+        status: "active",
+        meta: medicine.meta,
+        reminderEnabled: medicine.reminderEnabled,
+      });
+
+      await medicineInstance.save()
+    }
+
+    return savedMedicineSchedule;
   } catch (error: any) {
     throw new Error(error.message || "Failed to create medicine");
   }
 };
 
 export const getAllMedicines = async (
-  userId: string, 
-  status?: string, 
+  userId: string,
+  status?: string,
   date?: string,
   patientId?: string
 ): Promise<IMedicine[]> => {
@@ -107,8 +129,8 @@ export const getMedicineById = async (userId: string, medicineId: string): Promi
 };
 
 export const updateMedicine = async (
-  userId: string, 
-  medicineId: string, 
+  userId: string,
+  medicineId: string,
   data: UpdateMedicineInput
 ): Promise<IMedicine> => {
   try {

@@ -15,7 +15,7 @@ import {
   Query,
 } from "tsoa";
 import * as MedicineService from "../services/medicineService";
-import { CreateMedicineInput, UpdateMedicineInput, MedicineResponse } from "../types/schema/Medicine";
+import { CreateMedicineScheduleInput, UpdateMedicineScheduleInput, MedicineScheduleResponse } from "../types/schema/Medicine";
 import { ErrorMessageResponse, SuccessMessageResponse } from "../types/schema/Common";
 
 @Route("medicines")
@@ -30,8 +30,8 @@ export class MedicineController extends Controller {
   @Response<ErrorMessageResponse>(400, "Validation failed or invalid input")
   public async createMedicine(
     @Request() req: any,
-    @Body() body: CreateMedicineInput
-  ): Promise<MedicineResponse | ErrorMessageResponse> {
+    @Body() body: CreateMedicineScheduleInput
+  ): Promise<MedicineScheduleResponse | ErrorMessageResponse> {
     try {
       const userId = req.user?._id;
       if (!userId) {
@@ -56,7 +56,7 @@ export class MedicineController extends Controller {
     @Query() status?: string,
     @Query() date?: string,
     @Query() patientId?: string
-  ): Promise<MedicineResponse[] | ErrorMessageResponse> {
+  ): Promise<MedicineScheduleResponse | ErrorMessageResponse> {
     try {
       const userId = req.user?._id;
       if (!userId) {
@@ -65,7 +65,7 @@ export class MedicineController extends Controller {
       }
 
       this.setStatus(200);
-      return await MedicineService.getAllMedicines(String(userId), status, date, patientId) as any[];
+      return await MedicineService.getAllMedicines(String(userId), status, date, patientId) as any;
     } catch (error: any) {
       this.setStatus(400);
       return { message: error.message || "Failed to fetch medicines" };
@@ -79,7 +79,7 @@ export class MedicineController extends Controller {
   public async getMedicineById(
     @Request() req: any,
     @Path() id: string
-  ): Promise<MedicineResponse | ErrorMessageResponse> {
+  ): Promise<MedicineScheduleResponse | ErrorMessageResponse> {
     try {
       const userId = req.user?._id;
       if (!userId) {
@@ -102,16 +102,18 @@ export class MedicineController extends Controller {
   public async updateMedicine(
     @Request() req: any,
     @Path() id: string,
-    @Body() body: UpdateMedicineInput
-  ): Promise<MedicineResponse | ErrorMessageResponse> {
+    @Body() body: UpdateMedicineScheduleInput
+  ): Promise<MedicineScheduleResponse | ErrorMessageResponse> {
     try {
       const userId = req.user?._id;
+
       if (!userId) {
         this.setStatus(401);
         throw new Error("Unauthorized");
       }
 
       this.setStatus(200);
+
       return await MedicineService.updateMedicine(String(userId), id, body) as any;
     } catch (error: any) {
       this.setStatus(400);
