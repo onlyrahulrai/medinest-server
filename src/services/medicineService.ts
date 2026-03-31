@@ -32,16 +32,19 @@ const calculateEndDate = (startDate?: Date | unknown, durationLabel?: string) =>
 
 export const createMedicineSchedule = async (userId: string, data: CreateMedicineScheduleInput): Promise<IMedicine> => {
   try {
-    const { user, name, startDate, prescribedBy, groupForHowLong, reminderEnabled, groupNotes, medicines } = data;
+    const { user, name, duration, prescribedBy, reminderEnabled, groupNotes, medicines } = data;
 
     const medicineSchedule = new MedicineSchedule({
       user,
       createdBy: userId,
       name,
       type: medicines.length > 1 ? "multi" : "single",
-      startDate,
-      endDate: calculateEndDate(startDate, groupForHowLong),
-      forHowLong: groupForHowLong,
+      duration: {
+        startDate: duration.startDate,
+        endDate: calculateEndDate(duration.startDate, duration.forHowLong),
+        forHowLong: duration.forHowLong,
+        isOngoing: duration.isOngoing,
+      },
       notes: groupNotes,
       status: "active",
       prescribedBy,
@@ -60,7 +63,12 @@ export const createMedicineSchedule = async (userId: string, data: CreateMedicin
         routines: medicine.routineIds,
         customSchedule: medicine.customSchedule,
         mealTiming: medicine.mealTiming,
-        duration: medicine.duration,
+        duration: {
+          startDate: medicine.duration.startDate,
+          endDate: calculateEndDate(medicine.duration.startDate, medicine.duration.forHowLong),
+          forHowLong: medicine.duration.forHowLong,
+          isOngoing: medicine.duration.isOngoing,
+        },
         isDurationInherited: medicine.isDurationInherited,
         refill: medicine.refill,
         purpose: medicine.purpose,

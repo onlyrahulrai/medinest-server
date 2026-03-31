@@ -32,6 +32,7 @@ export interface IMedicine extends Document {
   duration: {
     startDate: Date;
     endDate?: Date;
+    forHowLong: string;
     isOngoing: boolean;
   };
   isDurationInherited: boolean;
@@ -103,6 +104,7 @@ const MedicineSchema: Schema = new Schema(
     duration: {
       startDate: { type: Date, required: true },
       endDate: { type: Date },
+      forHowLong: { type: String },
       isOngoing: { type: Boolean, default: false },
     },
     isDurationInherited: { type: Boolean, default: false },

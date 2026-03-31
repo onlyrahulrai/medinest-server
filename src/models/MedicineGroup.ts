@@ -6,9 +6,12 @@ export interface IMedicineGroup extends Document {
 
     name: string;
     type: "single" | "multi";
-    startDate: Date;
-    endDate: Date;
-    forHowLong: number;
+    duration: {
+        startDate: Date;
+        endDate: Date;
+        forHowLong: string;
+        isOngoing: boolean;
+    }
     status: "active" | "completed" | "archived";
     notes: string;
     prescribedBy: string;
@@ -30,10 +33,16 @@ const MedicineGroupSchema = new mongoose.Schema({
         enum: ["single", "multi"],
         default: "single"
     },
-    startDate: Date,
-    endDate: Date,
-    forHowLong: {
-        type: Number,
+    duration: {
+        startDate: { type: Date, required: true },
+        endDate: { type: Date },
+        forHowLong: {
+            type: String,
+        },
+        isOngoing: {
+            type: Boolean,
+            default: false,
+        }
     },
     status: {
         type: String,
@@ -52,7 +61,7 @@ MedicineGroupSchema.index({ user: 1, status: 1 });
 MedicineGroupSchema.index({ createdBy: 1 });
 
 MedicineGroupSchema.pre("validate", function (next) {
-    if (this.endDate && this.startDate && this.endDate < this.startDate) {
+    if (this.duration.endDate && this.duration.startDate && this.duration.endDate < this.duration.startDate) {
         return next(new Error("endDate cannot be before startDate"));
     }
     next();

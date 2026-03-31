@@ -12,7 +12,7 @@ export interface CustomSchedule {
 
 export interface MedicineDuration {
   startDate: string; // ISO string
-  durationInDays?: string;
+  forHowLong?: string;
   isOngoing?: boolean;
 }
 
@@ -47,8 +47,11 @@ export interface CreateMedicineInput {
 export interface CreateMedicineScheduleInput {
   user?: string,
   name?: string,
-  startDate?: string,
-  groupForHowLong?: string,
+  duration: {
+    startDate?: string,
+    forHowLong?: string,
+    isOngoing?: boolean,
+  },
   groupNotes?: string,
   prescribedBy?: string,
   reminderEnabled?: boolean,
@@ -64,8 +67,11 @@ export interface UpdateMedicineScheduleInput {
   _id: string,
   user?: string,
   name?: string,
-  startDate?: string,
-  groupForHowLong?: string,
+  duration: {
+    startDate?: string,
+    forHowLong?: string,
+    isOngoing?: boolean,
+  },
   groupNotes?: string,
   prescribedBy?: string,
   reminderEnabled?: boolean,
