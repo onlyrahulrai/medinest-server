@@ -30,19 +30,20 @@ const calculateEndDate = (startDate?: Date | unknown, durationLabel?: string) =>
   return date;
 }
 
-export const createMedicine = async (user: string, data: CreateMedicineScheduleInput): Promise<IMedicine> => {
+export const createMedicineSchedule = async (userId: string, data: CreateMedicineScheduleInput): Promise<IMedicine> => {
   try {
-    const { ownerId, name, startDate, prescribedBy, groupDurationLabel, reminderEnabled, groupNotes, medicines } = data;
+    const { user, name, startDate, prescribedBy, groupForHowLong, reminderEnabled, groupNotes, medicines } = data;
 
     const medicineSchedule = new MedicineSchedule({
-      user: ownerId,
-      createdBy: user,
+      user,
+      createdBy: userId,
       name,
       type: medicines.length > 1 ? "multi" : "single",
       startDate,
-      endDate: calculateEndDate(startDate, groupDurationLabel),
-      status: "active",
+      endDate: calculateEndDate(startDate, groupForHowLong),
+      forHowLong: groupForHowLong,
       notes: groupNotes,
+      status: "active",
       prescribedBy,
       reminderEnabled,
     });
@@ -51,8 +52,8 @@ export const createMedicine = async (user: string, data: CreateMedicineScheduleI
 
     for (const medicine of medicines) {
       const medicineInstance = new Medicine({
-        user: ownerId,
-        createdBy: user,
+        user,
+        createdBy: userId,
         group: savedMedicineSchedule._id,
         name: medicine.name,
         dosage: medicine.dosage,
