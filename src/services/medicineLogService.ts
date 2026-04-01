@@ -18,7 +18,7 @@ export const generateLogsForMedicine = async (medicineId: string, daysAhead: num
 
   for (let m = moment(genStart); m.isBefore(genEnd); m.add(1, 'days')) {
     if (medicine.customSchedule.enabled) {
-      if (medicine.customSchedule.frequency === 'daily') {
+      if (medicine.customSchedule.frequency.toLowerCase().includes('daily')) {
         medicine.customSchedule.times.forEach(time => {
           const scheduledTime = moment(m).set({
             hour: parseInt(time.split(':')[0]),
@@ -56,7 +56,13 @@ export const generateLogsForMedicine = async (medicineId: string, daysAhead: num
       }
       // Add other frequencies if needed
     } else if (medicine.routines && medicine.routines.length > 0) {
+      const uniqueScheduledTimes = new Set();
+      
       medicine.routines.forEach((routine: any) => {
+        const timeKey = routine.time;
+        if (uniqueScheduledTimes.has(timeKey)) return;
+        uniqueScheduledTimes.add(timeKey);
+
         const scheduledTime = moment(m).set({
           hour: parseInt(routine.time.split(':')[0]),
           minute: parseInt(routine.time.split(':')[1]),

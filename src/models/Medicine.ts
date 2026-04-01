@@ -16,7 +16,7 @@ export interface IMedicine extends Document {
   customSchedule: {
     enabled: boolean;
     times: string[];
-    frequency: 'Once daily' | 'Twice daily' | 'Thrice daily' | 'Four times daily' | 'As needed';
+    frequency: 'Once daily' | 'Twice daily' | 'Three times daily' | 'Four times daily' | 'As needed';
   };
   mealTiming: {
     type: String,
@@ -88,7 +88,7 @@ const MedicineSchema: Schema = new Schema(
       times: [String],
       frequency: {
         type: String,
-        enum: ["Once daily", "Twice daily", "Thrice daily", "Four times daily", "As needed"],
+        enum: ["Once daily", "Twice daily", "Three times daily", "Four times daily", "As needed"],
       },
     },
     mealTiming: {

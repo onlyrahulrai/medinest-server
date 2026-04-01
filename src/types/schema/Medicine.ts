@@ -7,7 +7,7 @@ export interface MedicineDosage {
 export interface CustomSchedule {
   enabled: boolean;
   times: string[];
-  frequency: 'Once daily' | 'Twice daily' | 'Thrice daily' | 'Four times daily' | 'As needed';
+  frequency: 'Once daily' | 'Twice daily' | 'Three times daily' | 'Four times daily' | 'As needed';
 }
 
 export interface MedicineDuration {
