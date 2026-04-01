@@ -32,7 +32,7 @@ export interface MedicineMeta {
 export interface CreateMedicineInput {
   name: string;
   dosage: MedicineDosage;
-  routineIds?: string[];
+  routines?: string[];
   customSchedule: CustomSchedule;
   mealTiming?: string;
   duration: MedicineDuration;
@@ -83,7 +83,7 @@ export interface MedicineLogResponse {
   _id: string;
   userId: string;
   medicineId: string;
-  routineId?: string;
+  routine?: string;
   scheduledTime: string;
   status: 'pending' | 'taken' | 'skipped' | 'missed';
   notes?: string;

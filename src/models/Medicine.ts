@@ -21,12 +21,12 @@ export interface IMedicine extends Document {
   mealTiming: {
     type: String,
     enum: [
-      "empty_stomach",
-      "before_food",
-      "after_food",
-      "with_food",
-      "bedtime",
-      "anytime",
+      "Before Meal",
+      "After Meal",
+      "With Meal",
+      "Empty Stomach",
+      "Bed Time",
+      "Any Time",
     ]
   },
   duration: {
@@ -45,14 +45,14 @@ export interface IMedicine extends Document {
   purpose?: string;
   notes?: string;
   status: {
-    type: String,
+    type: string,
     enum: ["active", "paused", "completed", "deleted"],
     default: "active",
   },
   meta: {
-    color: String,
-    photo: String,
-    type: String,
+    color: string,
+    photo: string,
+    type: string,
   },
   reminderEnabled?: boolean;
 
@@ -94,11 +94,12 @@ const MedicineSchema: Schema = new Schema(
     mealTiming: {
       type: String,
       enum: [
-        "before_food",
-        "after_food",
-        "with_food",
-        "empty_stomach",
-        "anytime",
+        "Before Meal",
+        "After Meal",
+        "With Meal",
+        "Empty Stomach",
+        "Bed Time",
+        "Any Time",
       ],
     },
     duration: {

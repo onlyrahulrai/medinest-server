@@ -4,31 +4,8 @@ import mongoose, { Types } from "mongoose";
 import User from "../models/User";
 import { generateLogsForMedicine } from "./medicineLogService";
 import MedicineSchedule from "../models/MedicineGroup";
+import { calculateEndDate, getDurationInDays } from "../helper/utils/common";
 
-const calculateEndDate = (startDate?: Date | unknown, durationLabel?: string) => {
-  const date = new Date(startDate);
-
-  switch (durationLabel) {
-    case "Once daily":
-      date.setDate(date.getDate() + 1);
-      break;
-    case "Twice daily":
-      date.setDate(date.getDate() + 2);
-      break;
-    case "Three times daily":
-      date.setDate(date.getDate() + 3);
-      break;
-    case "Four times daily":
-      date.setDate(date.getDate() + 4);
-      break;
-    case "As needed":
-      date.setDate(date.getDate() + 1);
-      break;
-    default:
-      break;
-  }
-  return date;
-}
 
 export const createMedicineSchedule = async (userId: string, data: CreateMedicineScheduleInput): Promise<IMedicine> => {
   try {
@@ -54,13 +31,15 @@ export const createMedicineSchedule = async (userId: string, data: CreateMedicin
     const savedMedicineSchedule = await medicineSchedule.save();
 
     for (const medicine of medicines) {
+      console.log("Medicine Meta: ", medicine.meta);
+
       const medicineInstance = new Medicine({
         user,
         createdBy: userId,
         group: savedMedicineSchedule._id,
         name: medicine.name,
         dosage: medicine.dosage,
-        routines: medicine.routineIds,
+        routines: medicine.routines,
         customSchedule: medicine.customSchedule,
         mealTiming: medicine.mealTiming,
         duration: {
@@ -74,11 +53,17 @@ export const createMedicineSchedule = async (userId: string, data: CreateMedicin
         purpose: medicine.purpose,
         notes: medicine.notes,
         status: "active",
-        meta: medicine.meta,
+        meta: {
+          color: medicine.meta?.color,
+          // photo: medicine.meta?.photo,
+          type: medicine.meta?.type,
+        },
         reminderEnabled: medicine.reminderEnabled,
       });
 
-      await medicineInstance.save()
+      await medicineInstance.save();
+
+      await generateLogsForMedicine(String(medicineInstance._id), getDurationInDays(medicineInstance.duration.startDate, medicineInstance.duration.endDate));
     }
 
     return savedMedicineSchedule;

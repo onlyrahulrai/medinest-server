@@ -87,3 +87,35 @@ export const syncCaregiverData = async (data: { phone: string, userId: string })
     }
   );
 };
+
+export const getDurationInDays = (startDate: Date, endDate: Date) => {
+  const diffTime = new Date(endDate).getTime() - new Date(startDate).getTime();
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+};
+
+export const calculateEndDate = (startDate?: Date | unknown, durationLabel?: string) => {
+  if (!startDate) return undefined;
+
+  const date = new Date(startDate);
+
+  switch (durationLabel) {
+    case "Once daily":
+      date.setDate(date.getDate() + 1);
+      break;
+    case "Twice daily":
+      date.setDate(date.getDate() + 2);
+      break;
+    case "Three times daily":
+      date.setDate(date.getDate() + 3);
+      break;
+    case "Four times daily":
+      date.setDate(date.getDate() + 4);
+      break;
+    case "As needed":
+      date.setDate(date.getDate() + 1);
+      break;
+    default:
+      break;
+  }
+  return date;
+}

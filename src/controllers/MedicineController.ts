@@ -34,12 +34,16 @@ export class MedicineController extends Controller {
   ): Promise<MedicineScheduleResponse | ErrorMessageResponse> {
     try {
       const userId = req.user?._id;
+
       if (!userId) {
         this.setStatus(401);
         throw new Error("Unauthorized");
       }
 
+      console.log("Hello World")
+
       this.setStatus(201);
+
       return await MedicineService.createMedicineSchedule(String(userId), body) as any;
     } catch (error: any) {
       this.setStatus(400);
