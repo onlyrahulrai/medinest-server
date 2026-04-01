@@ -1,13 +1,13 @@
 import Medicine, { IMedicine } from "../models/Medicine";
+import MedicineSchedule, { IMedicineGroup } from "../models/MedicineGroup";
 import { UpdateMedicineInput, CreateMedicineScheduleInput } from "../types/schema/Medicine";
 import mongoose, { Types } from "mongoose";
 import User from "../models/User";
 import { generateLogsForMedicine } from "./medicineLogService";
-import MedicineSchedule from "../models/MedicineGroup";
 import { calculateEndDate, getDurationInDays } from "../helper/utils/common";
 
 
-export const createMedicineSchedule = async (userId: string, data: CreateMedicineScheduleInput): Promise<IMedicine> => {
+export const createMedicineSchedule = async (userId: string, data: CreateMedicineScheduleInput): Promise<IMedicineGroup> => {
   try {
     const { user, name, duration, prescribedBy, reminderEnabled, groupNotes, medicines } = data;
 
@@ -55,7 +55,7 @@ export const createMedicineSchedule = async (userId: string, data: CreateMedicin
         status: "active",
         meta: {
           color: medicine.meta?.color,
-          // photo: medicine.meta?.photo,
+          photo: medicine.meta?.photo,
           type: medicine.meta?.type,
         },
         reminderEnabled: medicine.reminderEnabled,
@@ -90,7 +90,7 @@ export const getAllMedicines = async (
       targetUserId = patientId;
     }
 
-    query.userId = targetUserId;
+    query.user = targetUserId;
 
     if (status === 'active') {
       query.isActive = true;
@@ -111,7 +111,7 @@ export const getMedicineById = async (userId: string, medicineId: string): Promi
       throw new Error("Invalid medicine ID");
     }
 
-    const medicine = await Medicine.findOne({ _id: medicineId, userId }).populate("routineIds");
+    const medicine = await Medicine.findOne({ _id: medicineId, user: userId }).populate("routineIds");
     if (!medicine) {
       throw new Error("Medicine not found");
     }
@@ -137,7 +137,7 @@ export const updateMedicine = async (
     }
 
     const medicine = await Medicine.findOneAndUpdate(
-      { _id: medicineId, userId },
+      { _id: medicineId, user: userId },
       { $set: data },
       { new: true }
     );
@@ -164,7 +164,7 @@ export const deleteMedicine = async (userId: string, medicineId: string): Promis
     }
 
     const medicine = await Medicine.findOneAndUpdate(
-      { _id: medicineId, userId },
+      { _id: medicineId, user: userId },
       { $set: { isActive: false } },
       { new: true }
     );

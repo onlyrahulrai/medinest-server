@@ -8,7 +8,7 @@ export interface IMedicine extends Document {
 
   name: string;
   dosage: {
-    amount: string;
+    amount: number;
     unit: string;
     perIntake: number;
   };
@@ -123,9 +123,9 @@ const MedicineSchema: Schema = new Schema(
       default: "active",
     },
     meta: {
-      color: String,
-      photo: String,
-      type: String,
+      color: { type: String },
+      photo: { type: String },
+      type: { type: String },
     },
     reminderEnabled: { type: Boolean, default: true },
 

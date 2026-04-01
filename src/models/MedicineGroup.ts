@@ -67,4 +67,4 @@ MedicineGroupSchema.pre("validate", function (next) {
     next();
 });
 
-export default mongoose.model("MedicineGroup", MedicineGroupSchema);
+export default mongoose.model<IMedicineGroup>("MedicineGroup", MedicineGroupSchema);
