@@ -1,64 +1,80 @@
 import Medicine, { IMedicine } from "../models/Medicine";
-import { CreateMedicineInput, UpdateMedicineInput } from "../types/schema/Medicine";
-import mongoose from "mongoose";
+import MedicineSchedule, { IMedicineGroup } from "../models/MedicineGroup";
+import { UpdateMedicineInput, CreateMedicineScheduleInput } from "../types/schema/Medicine";
+import mongoose, { Types } from "mongoose";
 import User from "../models/User";
 import { generateLogsForMedicine } from "./medicineLogService";
+import { calculateEndDate, getDurationInDays } from "../helper/utils/common";
 
-export const createMedicine = async (userId: string, data: CreateMedicineInput): Promise<IMedicine> => {
+
+export const createMedicineSchedule = async (userId: string, data: CreateMedicineScheduleInput): Promise<IMedicineGroup> => {
   try {
-    // Basic validation
-    if (!data.name || !data.type || !data.dosage) {
-      throw new Error("Medicine name, type, and dosage are required");
-    }
+    const { user, name, duration, prescribedBy, reminderEnabled, groupNotes, medicines } = data;
 
-    if (data.routineIds && data.routineIds.length > 0 && data.customSchedule?.enabled) {
-      throw new Error("Cannot use both routine and custom schedule");
-    }
-
-    if ((!data.routineIds || data.routineIds.length === 0) && !data.customSchedule?.enabled) {
-      throw new Error("Schedule is required (select routines or define custom schedule)");
-    }
-
-    // Determine target user (self or patient)
-    let targetUserId = userId;
-    if (data.patientId && data.patientId !== userId) {
-      const user = await User.findById(userId);
-      if (!user?.managedPatients?.some(id => id.toString() === data.patientId)) {
-        throw new Error("You do not have permission to manage this patient");
-      }
-      targetUserId = data.patientId;
-    }
-
-    const startDate = new Date(data.duration.startDate);
-    const endDate = data.duration.endDate ? new Date(data.duration.endDate) : undefined;
-
-    if (endDate && startDate > endDate) {
-      throw new Error("Start date cannot be after end date");
-    }
-
-    const medicine = new Medicine({
-      userId: targetUserId,
-      ...data,
+    const medicineSchedule = new MedicineSchedule({
+      user,
+      createdBy: userId,
+      name,
+      type: medicines.length > 1 ? "multi" : "single",
       duration: {
-        startDate,
-        endDate
-      }
+        startDate: duration.startDate,
+        endDate: calculateEndDate(duration.startDate, duration.forHowLong),
+        forHowLong: duration.forHowLong,
+        isOngoing: duration.isOngoing,
+      },
+      notes: groupNotes,
+      status: "active",
+      prescribedBy,
+      reminderEnabled,
     });
 
-    const savedMed = await medicine.save();
-    
-    // Generate initial logs for 1 month
-    await generateLogsForMedicine(String(savedMed._id), 30);
+    const savedMedicineSchedule = await medicineSchedule.save();
 
-    return savedMed;
+    for (const medicine of medicines) {
+      console.log("Medicine Meta: ", medicine.meta);
+
+      const medicineInstance = new Medicine({
+        user,
+        createdBy: userId,
+        group: savedMedicineSchedule._id,
+        name: medicine.name,
+        dosage: medicine.dosage,
+        routines: medicine.routines,
+        customSchedule: medicine.customSchedule,
+        mealTiming: medicine.mealTiming,
+        duration: {
+          startDate: medicine.duration.startDate,
+          endDate: calculateEndDate(medicine.duration.startDate, medicine.duration.forHowLong),
+          forHowLong: medicine.duration.forHowLong,
+          isOngoing: medicine.duration.isOngoing,
+        },
+        isDurationInherited: medicine.isDurationInherited,
+        refill: medicine.refill,
+        purpose: medicine.purpose,
+        notes: medicine.notes,
+        status: "active",
+        meta: {
+          color: medicine.meta?.color,
+          photo: medicine.meta?.photo,
+          type: medicine.meta?.type,
+        },
+        reminderEnabled: medicine.reminderEnabled,
+      });
+
+      await medicineInstance.save();
+
+      await generateLogsForMedicine(String(medicineInstance._id), getDurationInDays(medicineInstance.duration.startDate, medicineInstance.duration.endDate));
+    }
+
+    return savedMedicineSchedule;
   } catch (error: any) {
     throw new Error(error.message || "Failed to create medicine");
   }
 };
 
 export const getAllMedicines = async (
-  userId: string, 
-  status?: string, 
+  userId: string,
+  status?: string,
   date?: string,
   patientId?: string
 ): Promise<IMedicine[]> => {
@@ -74,7 +90,7 @@ export const getAllMedicines = async (
       targetUserId = patientId;
     }
 
-    query.userId = targetUserId;
+    query.user = targetUserId;
 
     if (status === 'active') {
       query.isActive = true;
@@ -95,7 +111,7 @@ export const getMedicineById = async (userId: string, medicineId: string): Promi
       throw new Error("Invalid medicine ID");
     }
 
-    const medicine = await Medicine.findOne({ _id: medicineId, userId }).populate("routineIds");
+    const medicine = await Medicine.findOne({ _id: medicineId, user: userId }).populate("routineIds");
     if (!medicine) {
       throw new Error("Medicine not found");
     }
@@ -107,8 +123,8 @@ export const getMedicineById = async (userId: string, medicineId: string): Promi
 };
 
 export const updateMedicine = async (
-  userId: string, 
-  medicineId: string, 
+  userId: string,
+  medicineId: string,
   data: UpdateMedicineInput
 ): Promise<IMedicine> => {
   try {
@@ -121,7 +137,7 @@ export const updateMedicine = async (
     }
 
     const medicine = await Medicine.findOneAndUpdate(
-      { _id: medicineId, userId },
+      { _id: medicineId, user: userId },
       { $set: data },
       { new: true }
     );
@@ -148,7 +164,7 @@ export const deleteMedicine = async (userId: string, medicineId: string): Promis
     }
 
     const medicine = await Medicine.findOneAndUpdate(
-      { _id: medicineId, userId },
+      { _id: medicineId, user: userId },
       { $set: { isActive: false } },
       { new: true }
     );
