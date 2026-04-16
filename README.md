@@ -1,4 +1,4 @@
-# Backend API
+# Medinest Backend API
 
 A robust, scalable backend application built with **Node.js**, **Express.js**, **TSOA**, **MongoDB**, **BullMQ**, and **Nodemailer**.  
 This project is designed with clean architecture principles, featuring REST APIs, background job processing, and email integration.
